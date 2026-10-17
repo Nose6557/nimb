@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NIMB — щоденник головного болю</title>
+<link rel="icon" href="favicon/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="favicon/icon-180.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="NIMB">
+<script>
+  // Тема ставиться до першого малювання, щоб не блимало.
+  try { const t = localStorage.getItem("nimb_theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;900&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="no-tabs">
+
+<!-- ЕКРАН: вхід -->
+<section id="screen-auth" class="screen active">
+  <div class="auth">
+    <div class="mark">
+      <svg viewBox="0 0 512 512" aria-hidden="true"><use href="#logo"/></svg>
+      <h1 class="wordmark">NIMB</h1>
+      <p class="muted">Щоденник головного болю, що вчиться на твоїх даних.</p>
+    </div>
+    <div class="segmented" role="tablist" aria-label="Вхід або реєстрація">
+      <button class="seg active" data-authtab="in" role="tab" aria-selected="true">Вхід</button>
+      <button class="seg" data-authtab="up" role="tab" aria-selected="false">Реєстрація</button>
+    </div>
+    <label class="field"><span>Електронна пошта</span><input type="email" id="auth-email" autocomplete="email" placeholder="you@example.com"></label>
+    <label class="field"><span>Пароль</span><input type="password" id="auth-pass" autocomplete="current-password" placeholder="мінімум 6 символів"></label>
+    <p class="note error" id="auth-msg" role="alert" hidden></p>
+    <button class="btn primary" id="auth-go">Увійти</button>
+    <button class="btn ghost" id="auth-guest">Спробувати без акаунта</button>
+    <p class="small muted" style="text-align:center">Без акаунта записи зберігаються лише в цьому браузері.</p>
+  </div>
+</section>
+
+<!-- ЕКРАН: головна -->
+<section id="screen-home" class="screen">
+  <div class="shell">
+    <header class="top">
+      <div class="brand"><svg viewBox="0 0 512 512" aria-hidden="true"><use href="#logo"/></svg><b>NIMB</b></div>
+      <span class="small muted" id="home-date"></span>
+    </header>
+
+    <div id="active-slot"></div>
+
+    <div class="card" id="quick-card">
+      <button class="big-btn" id="btn-pain"><b>Болить</b><span>зараз</span></button>
+      <div class="row">
+        <button class="btn ghost" id="btn-ok">Сьогодні без болю</button>
+        <button class="btn ghost" id="btn-past">Записати минулий</button>
+      </div>
+    </div>
+
+    <div class="card risk" id="risk-card" data-level="">
+      <div class="card-head"><span class="eyebrow">Прогноз</span><span class="small muted" id="risk-place"></span></div>
+      <div class="risk-top"><span class="risk-dot"></span><div><p class="small muted">Ризик на завтра</p><p class="risk-level" id="risk-level">—</p></div></div>
+      <p id="risk-why" class="small"></p>
+      <div class="chips" id="risk-factors"></div>
+      <div class="days3" id="risk-days"></div>
+      <div class="env-line" id="env-line"></div>
+      <p class="card-note" id="risk-note"></p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>Останні записи</h3><button class="link" data-go="history">Усі</button></div>
+      <div class="list" id="recent-list"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ЕКРАН: історія -->
+<section id="screen-history" class="screen">
+  <div class="shell">
+    <header class="top"><h1>Історія</h1><span class="small muted" id="hist-count"></span></header>
+    <input class="search" id="hist-q" type="search" placeholder="Пошук у нотатках…">
+    <div id="hist-list"></div>
+  </div>
+</section>
+
+<!-- ЕКРАН: статистика -->
+<section id="screen-stats" class="screen">
+  <div class="shell">
+    <header class="top"><h1>Статистика</h1></header>
+    <div class="segmented" id="stats-range">
+      <button class="seg" data-range="90">3 міс</button>
+      <button class="seg active" data-range="365">Рік</button>
+      <button class="seg" data-range="0">Усе</button>
+    </div>
+    <div class="stats" id="kpis"></div>
+    <p class="note warn" id="med-warn" hidden></p>
+    <div class="card"><div class="card-head"><h3>Епізоди по місяцях</h3></div><p class="card-note">Стовпчик — епізоди. Точка — дні з таблеткою.</p><div class="chart" id="chart-months"></div></div>
+    <div class="card"><div class="card-head"><h3>Календар</h3></div><p class="card-note">Кожна клітинка — день. Чим темніше, тим сильніший біль.</p><div class="heat" id="heat"></div>
+      <div class="legend"><span><i style="background:var(--fill)"></i>немає запису</span><span><i style="background:color-mix(in srgb,var(--ok) 35%,var(--fill))"></i>без болю</span><span><i style="background:color-mix(in srgb,var(--accent) 45%,var(--fill))"></i>слабкий</span><span><i style="background:var(--accent)"></i>сильний</span></div></div>
+    <div class="card"><div class="card-head"><h3>Що впливає саме на тебе</h3></div><p class="card-note" id="factors-note"></p><div id="factors"></div></div>
+    <div class="grid2">
+      <div class="card"><h3>Коли починається</h3><div class="hbars" id="b-onset"></div></div>
+      <div class="card"><h3>Тригери з записів</h3><div class="hbars" id="b-trig"></div></div>
+      <div class="card"><h3>День тижня</h3><div class="hbars" id="b-week"></div></div>
+      <div class="card"><h3>Таблетки</h3><div class="hbars" id="b-meds"></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ЕКРАН: налаштування -->
+<section id="screen-settings" class="screen">
+  <div class="shell">
+    <header class="top"><h1>Налаштування</h1></header>
+    <div class="card">
+      <h3>Тема</h3>
+      <div class="segmented" id="theme-seg">
+        <button class="seg" data-theme-v="system">Системна</button>
+        <button class="seg" data-theme-v="light">Світла</button>
+        <button class="seg" data-theme-v="dark">Темна</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Місце для погоди</h3>
+      <div class="segmented" id="loc-seg">
+        <button class="seg" data-loc="auto">Автоматично</button>
+        <button class="seg" data-loc="manual">Вручну</button>
+      </div>
+      <p class="small muted" id="loc-now"></p>
+      <div id="loc-manual" hidden>
+        <label class="field"><span>Місто</span><input id="city-q" type="search" placeholder="Київ" autocomplete="off"></label>
+        <div class="chips" id="city-results" style="margin-top:8px"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Дані</h3>
+      <p class="card-note">Імпорт щоденника з Notion (CSV). Експорт усіх записів.</p>
+      <label class="btn ghost" for="import-file">Імпортувати CSV</label>
+      <input type="file" id="import-file" accept=".csv,text/csv" hidden>
+      <div class="row">
+        <button class="btn ghost" id="exp-csv">Експорт CSV</button>
+        <button class="btn ghost" id="exp-json">Експорт JSON</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Акаунт</h3>
+      <p class="small" id="acc-who"></p>
+      <button class="btn ghost" id="acc-btn">Вийти</button>
+    </div>
+    <p class="small muted" style="padding:0 8px">Прогноз — підказка на основі твоїх записів і погоди, не медичний висновок. Дані: Open-Meteo.com, GFZ Potsdam, NOAA SWPC (CC BY 4.0). <span id="ver"></span></p>
+  </div>
+</section>
+
+<!-- нижня панель вкладок -->
+<nav class="tabs" id="tabs" hidden>
+  <button class="tab active" data-go="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>Головна</button>
+  <button class="tab" data-go="history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg>Історія</button>
+  <button class="tab" data-go="stats"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Статистика</button>
+  <button class="tab" data-go="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Налаштування</button>
+</nav>
+
+<!-- лист: запис епізоду -->
+<dialog class="sheet" id="ep-sheet" aria-labelledby="ep-title">
+  <div class="sheet-body">
+    <div class="grabber"></div>
+    <div class="sheet-head"><h2 id="ep-title">Запис</h2><button class="x-btn" data-close aria-label="Закрити">✕</button></div>
+    <div class="grid2" style="gap:12px">
+      <label class="field"><span>Почалося</span><input type="datetime-local" id="ep-start"></label>
+      <label class="field"><span>Минуло</span><input type="datetime-local" id="ep-end"></label>
+    </div>
+    <div class="field">
+      <span>Сила болю: <b id="ep-int-v">—</b></span>
+      <input type="range" id="ep-int" min="0" max="10" step="1" value="3">
+      <div class="scale"><span>0 · ледь</span><span>5 · заважає</span><span>10 · нестерпно</span></div>
+    </div>
+    <div class="field"><span>Де болить</span><div class="chips" data-group="sides"></div></div>
+    <div class="field"><span>Таблетка</span><div class="chips" data-group="meds"></div></div>
+    <div class="field" id="ep-relief-f"><span>Таблетка допомогла?</span><div class="chips" data-group="relief" data-single></div></div>
+    <div class="field"><span>Що могло спричинити</span><div class="chips" data-group="triggers"></div></div>
+    <label class="switch"><span>Нудота</span><input type="checkbox" id="ep-nausea"></label>
+    <label class="field"><span>Нотатка</span><textarea id="ep-note" placeholder="Що відчуваєш, що було напередодні…"></textarea></label>
+    <button class="btn primary" id="ep-save">Зберегти</button>
+    <button class="btn danger" id="ep-del" hidden>Видалити запис</button>
+  </div>
+</dialog>
+
+<!-- лист: імпорт -->
+<dialog class="sheet" id="imp-sheet" aria-labelledby="imp-title">
+  <div class="sheet-body">
+    <div class="grabber"></div>
+    <div class="sheet-head"><h2 id="imp-title">Імпорт</h2><button class="x-btn" data-close aria-label="Закрити">✕</button></div>
+    <p class="small" id="imp-sum"></p>
+    <div class="preview"><table><thead><tr><th>Дата</th><th>Початок</th><th>Сила</th><th>Таблетка</th><th>Тригери</th><th>Опис</th></tr></thead><tbody id="imp-rows"></tbody></table></div>
+    <p class="card-note">Час, тригери й таблетку визначено з тексту опису. Після імпорту будь-який запис можна виправити в Історії.</p>
+    <button class="btn primary" id="imp-go">Імпортувати</button>
+  </div>
+</dialog>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="logo" viewBox="0 0 512 512">
+    <ellipse cx="256" cy="150" rx="118" ry="36" fill="none" stroke="var(--accent)" stroke-width="28"/>
+    <circle cx="256" cy="318" r="106" fill="var(--accent)"/>
+    <path d="M206 318c16-22 34-22 50 0s34 22 50 0" fill="none" stroke="var(--bg)" stroke-width="20" stroke-linecap="round"/>
+  </symbol>
+</svg>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="version.js"></script>
+<script src="config.js"></script>
+<script src="store.js"></script>
+<script src="tags.js"></script>
+<script src="env.js"></script>
+<script src="charts.js"></script>
+<script src="app.js"></script>
+<script>
+  if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
