@@ -25,7 +25,7 @@
     { id: "tjump", label: "Різка зміна температури", prior: 1.3, test: (d) => d.temp_delta != null && Math.abs(d.temp_delta) >= 6, hint: "максимум відрізняється від вчорашнього на 6 °C і більше" },
     { id: "heat", label: "Спека", prior: 1.3, test: (d) => d.temp_max != null && d.temp_max >= 29, hint: "29 °C і вище" },
     { id: "rain", label: "Дощ", prior: 1.15, test: (d) => d.precip_sum != null && d.precip_sum >= 2, hint: "2 мм опадів і більше" },
-    { id: "wind", label: "Сильний вітер", prior: 1.15, test: (d) => d.wind_max != null && d.wind_max >= 30, hint: "пориви від 30 км/год" },
+    { id: "wind", label: "Сильний вітер", prior: 1.15, test: (d) => d.wind_max != null && d.wind_max >= 20, hint: "середній вітер від 20 км/год" },
     { id: "humid", label: "Висока вологість", prior: 1.1, test: (d) => d.humidity_mean != null && d.humidity_mean >= 85, hint: "середня вологість від 85%" },
     { id: "kp", label: "Магнітна буря", prior: 1.2, test: (d) => d.kp_max != null && d.kp_max >= 5, hint: "індекс Kp 5 і вище" },
     { id: "pm", label: "Брудне повітря", prior: 1.2, test: (d) => d.pm25_mean != null && d.pm25_mean >= 25, hint: "PM2.5 від 25 мкг/м³ за добу" },

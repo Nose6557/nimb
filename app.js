@@ -179,9 +179,9 @@
     }
     card.dataset.level = r.level;
     $("#risk-level").textContent = Env.LEVEL[r.level];
-    why.textContent = r.factors.length
+    why.textContent = r.level !== "low"
       ? `У такі дні болить у ${fmtN(r.mult, 1)} раза частіше, ніж зазвичай.`
-      : "Нічого незвичного в погоді на завтра.";
+      : r.factors.length ? "Ризик майже такий, як у звичайний день." : "Нічого незвичного в погоді на завтра.";
     r.factors.forEach((f) => { const c = document.createElement("span"); c.className = "chip static"; c.textContent = f.label; chips.appendChild(c); });
     [0, 1, 2].forEach((i) => {
       const k = shift(t, i), rr = Env.riskFor(S.env[k], m);
