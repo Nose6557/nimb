@@ -78,6 +78,7 @@
   // Помилки Supabase → зрозумілі тексти українською.
   function authText(e) {
     const m = String((e && e.message) || e);
+    if (/[а-яіїєґ]/i.test(m)) return m; // уже наш текст
     if (/invalid login/i.test(m)) return "Невірна пошта або пароль.";
     if (/not confirmed/i.test(m)) return "Спершу підтвердь пошту за посиланням з листа.";
     if (/already registered|already exists/i.test(m)) return "Акаунт з цією поштою вже є. Перейди на «Вхід».";
