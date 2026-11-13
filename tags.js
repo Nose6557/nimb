@@ -46,7 +46,7 @@
   /* ---------- дати ---------- */
   const MONTHS = { january: 0, february: 1, march: 2, april: 3, may: 4, june: 5, july: 6, august: 7, september: 8, october: 9, november: 10, december: 11,
     "січня": 0, "лютого": 1, "березня": 2, "квітня": 3, "травня": 4, "червня": 5, "липня": 6, "серпня": 7, "вересня": 8, "жовтня": 9, "листопада": 10, "грудня": 11 };
-  // «October 14, 2026», «14 жовтня 2026», «2026-10-14», «14.10.2026», можливо з часом «10:30»
+  // «October 14, 2026», «14 жовтня 2026», «2026-10-14», «14.10.2026», «14/10/2026», можливо з часом «10:30»
   function parseDate(s) {
     s = String(s || "").trim().toLowerCase();
     let y, m, d, hh = null, mm = 0;
@@ -58,10 +58,11 @@
     }
     let r;
     if ((r = s.match(/(\d{4})-(\d{2})-(\d{2})/))) { y = +r[1]; m = +r[2] - 1; d = +r[3]; }
-    else if ((r = s.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/))) { y = +r[3]; m = +r[2] - 1; d = +r[1]; }
+    else if ((r = s.match(/(\d{1,2})[./](\d{1,2})[./](\d{4})/))) { y = +r[3]; m = +r[2] - 1; d = +r[1]; }
     else if ((r = s.match(/([a-zа-яіїєґ]+)\s+(\d{1,2}),?\s+(\d{4})/i)) && r[1] in MONTHS) { y = +r[3]; m = MONTHS[r[1]]; d = +r[2]; }
     else if ((r = s.match(/(\d{1,2})\s+([a-zа-яіїєґ]+),?\s+(\d{4})/i)) && r[2] in MONTHS) { y = +r[3]; m = MONTHS[r[2]]; d = +r[1]; }
     else return null;
+    if (m < 0 || m > 11 || d < 1 || d > 31) return null;
     return { y, m, d, hh, mm };
   }
 
@@ -109,21 +110,23 @@
 
   const INTENSITY = { "слабкий": 3, "легкий": 3, "помірний": 5, "середній": 5, "сильний": 8, "дуже сильний": 9 };
 
+  const DATE_FORMATS = "2026-10-14, 14.10.2026, 14/10/2026, October 14, 2026, 14 жовтня 2026";
   // Notion CSV → епізоди. Шукає колонки за назвою, порядок не важливий.
+  // Повертає масив; out.skipped — рядки, де не вдалося прочитати дату.
   function importNotion(text) {
     const rows = parseCSV(text);
-    if (rows.length < 2) throw new Error("Файл порожній або не CSV.");
+    if (rows.length < 2) throw new Error("Файл порожній або це не CSV. Експортуй базу з Notion: ••• → Export → Markdown & CSV.");
     const head = rows[0].map((h) => h.trim().toLowerCase());
     const find = (...names) => head.findIndex((h) => names.some((n) => h.includes(n)));
     const iDate = find("дата", "date", "created");
     const iDesc = find("назва", "опис", "name", "title");
     const iInt = find("інтенсив", "сила", "intensity");
     const iNote = find("нотат", "notes", "note");
-    if (iDate < 0 || iDesc < 0) throw new Error("Не знайшов колонки «Дата» і «Назва / Опис».");
-    const out = [];
+    if (iDate < 0 || iDesc < 0) throw new Error(`Не знайшов колонки «Дата» і «Назва / Опис». У файлі є: ${rows[0].slice(0, 6).join(", ")}.`);
+    const out = [], skipped = [];
     for (const r of rows.slice(1)) {
       const dt = parseDate(r[iDate]);
-      if (!dt) continue;
+      if (!dt) { skipped.push(r[iDate] || "(порожньо)"); continue; }
       const desc = (r[iDesc] || "").trim();
       const extra = iNote >= 0 ? (r[iNote] || "").trim() : "";
       const tags = tagText(desc + " " + extra);
@@ -140,8 +143,10 @@
         note: [desc, extra].filter(Boolean).join("\n\n") || null, source: "import",
       });
     }
-    return out.sort((a, b) => (a.started_at < b.started_at ? -1 : 1));
+    out.sort((a, b) => (a.started_at < b.started_at ? -1 : 1));
+    out.skipped = skipped;
+    return out;
   }
 
-  window.Tags = { T, onsetOf, parseCSV, toCSV, parseDate, tagText, importNotion };
+  window.Tags = { T, onsetOf, parseCSV, toCSV, parseDate, tagText, importNotion, DATE_FORMATS };
 })();

@@ -22,7 +22,12 @@
     const y = (v) => m.t + (H - m.t - m.b) * (1 - v / top);
     const step = (W - m.l - m.r) / rows.length;
     const bw = Math.min(28, step * 0.62);
-    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", role: "img", "aria-label": "Епізоди по місяцях" }, box);
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", "aria-hidden": "true" }, box);
+    // Та сама інформація таблицею — для читача екрана.
+    const tbl = document.createElement("table"); tbl.className = "sr-only";
+    tbl.innerHTML = "<caption>Епізоди по місяцях</caption><tr><th>Місяць</th><th>Епізоди</th><th>Дні з таблеткою</th></tr>";
+    rows.forEach((r) => { const tr = tbl.insertRow(); [monLabel(r.key), r.a, r.b].forEach((v) => { tr.insertCell().textContent = v; }); });
+    box.appendChild(tbl);
     ticks.forEach((t) => {
       el("line", { x1: m.l, x2: W - m.r, y1: y(t), y2: y(t), stroke: "var(--chart-grid)" }, svg);
       const tx = el("text", { x: m.l - 6, y: y(t) + 4, "text-anchor": "end" }, svg); tx.textContent = t;
@@ -33,7 +38,7 @@
       const cx = m.l + step * i + step / 2;
       const h = y(0) - y(r.a);
       const bar = el("rect", { x: cx - bw / 2, y: y(r.a), width: bw, height: Math.max(0, h), rx: Math.min(6, bw / 2), fill: "var(--accent)", opacity: ".9" }, svg);
-      if (r.b) el("circle", { cx, cy: y(r.b), r: 3.5, fill: "var(--risk-mid)", stroke: "var(--surface)", "stroke-width": 1.5 }, svg);
+      if (r.b) el("circle", { cx, cy: y(r.b), r: 3.5, fill: "var(--chart-2)", stroke: "var(--surface)", "stroke-width": 1.5 }, svg);
       if (i % every === 0) { const t = el("text", { x: cx, y: H - 6, "text-anchor": "middle" }, svg); t.textContent = monLabel(r.key); }
       const hit = el("rect", { x: cx - step / 2, y: m.t, width: step, height: H - m.t - m.b, fill: "transparent" }, svg);
       const show = (ev) => {
@@ -73,21 +78,34 @@
     });
   }
 
-  // days: Map day -> level ('ok'|'l1'|'l2'|'l3'), weeks: скільки тижнів показати
-  function heat(box, days, weeks, dayKey) {
-    box.innerHTML = "";
+  // days: Map day -> level ('ok'|'l1'|'l2'|'l3'), weeks: скільки тижнів показати.
+  // months: контейнер для підписів місяців над стовпчиками-тижнями.
+  const LEVEL_TXT = { ok: "без болю", l1: "слабкий біль", l2: "середній біль", l3: "сильний біль" };
+  function heat(box, days, weeks, dayKey, months) {
+    box.innerHTML = ""; if (months) months.innerHTML = "";
     const now = new Date(); now.setHours(12, 0, 0, 0);
     const end = new Date(now); end.setDate(end.getDate() + (7 - ((end.getDay() + 6) % 7) - 1)); // неділя цього тижня
     const start = new Date(end); start.setDate(start.getDate() - weeks * 7 + 1);
+    let col = 0, lastMon = -1;
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const i = document.createElement("i");
       const k = dayKey(d);
       if (d > now) i.className = "out";
-      else if (days.has(k)) i.className = days.get(k);
-      i.title = k;
+      else {
+        if (days.has(k)) i.className = days.get(k);
+        i.dataset.day = k;
+        i.title = `${d.getDate()} ${MON[d.getMonth()]}: ${LEVEL_TXT[days.get(k)] || "немає запису"}`;
+      }
       box.appendChild(i);
+      if ((d.getDay() + 6) % 7 === 0) { // понеділок — новий стовпчик
+        if (months && d.getMonth() !== lastMon && d.getDate() <= 7) {
+          const s = document.createElement("span"); s.textContent = MON[d.getMonth()]; s.style.left = col * 15 + "px"; months.appendChild(s);
+          lastMon = d.getMonth();
+        }
+        col++;
+      }
     }
-    box.scrollLeft = box.scrollWidth;
+    const sc = box.parentElement; if (sc) sc.scrollLeft = sc.scrollWidth;
   }
 
   window.Charts = { months, hbars, heat, monLabel };

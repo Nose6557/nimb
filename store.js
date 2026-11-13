@@ -290,6 +290,26 @@
       const d = local(); d.ok_days = d.ok_days.filter((x) => x !== day); saveLocal(d);
     },
 
+    /* ---------- видалення ---------- */
+    // Усі записи й дні без болю. Акаунт лишається.
+    async wipe() {
+      if (mode === "supabase") {
+        must(await sb.from("episodes").delete().eq("user_id", user.id));
+        must(await sb.from("ok_days").delete().eq("user_id", user.id));
+        saveQueue([]); saveCache({ episodes: [], ok_days: [] });
+        return;
+      }
+      saveLocal({ episodes: [], ok_days: [] });
+    },
+    // Акаунт разом з усіма даними (функція delete_my_account у базі видаляє лише себе).
+    async deleteAccount() {
+      if (mode !== "supabase") return;
+      must(await sb.rpc("delete_my_account"));
+      try { localStorage.removeItem(kCache()); localStorage.removeItem(kQueue()); } catch {}
+      try { await sb.auth.signOut({ scope: "local" }); } catch {}
+      user = null; mode = "none";
+    },
+
     /* ---------- налаштування: тема й місце ----------
        Живуть у браузері (щоб тема ставилась до першого малювання)
        і дублюються в профіль акаунта, щоб переїжджати на інший пристрій. */
