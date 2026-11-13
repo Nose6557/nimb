@@ -25,23 +25,38 @@
 
 <!-- ЕКРАН: вхід -->
 <section id="screen-auth" class="screen active">
-  <div class="auth">
+  <form class="auth" id="auth-form" novalidate>
     <div class="mark">
       <svg viewBox="0 0 512 512" aria-hidden="true"><use href="#logo"/></svg>
       <h1 class="wordmark">NIMB</h1>
       <p class="muted">Щоденник головного болю, що вчиться на твоїх даних.</p>
     </div>
     <div class="segmented" role="tablist" aria-label="Вхід або реєстрація">
-      <button class="seg active" data-authtab="in" role="tab" aria-selected="true">Вхід</button>
-      <button class="seg" data-authtab="up" role="tab" aria-selected="false">Реєстрація</button>
+      <button class="seg active" type="button" data-authtab="in" role="tab" aria-selected="true">Вхід</button>
+      <button class="seg" type="button" data-authtab="up" role="tab" aria-selected="false">Реєстрація</button>
     </div>
     <label class="field"><span>Електронна пошта</span><input type="email" id="auth-email" autocomplete="email" placeholder="you@example.com"></label>
     <label class="field"><span>Пароль</span><input type="password" id="auth-pass" autocomplete="current-password" placeholder="мінімум 6 символів"></label>
+    <button class="link center" id="auth-forgot" type="button">Забув пароль?</button>
     <p class="note error" id="auth-msg" role="alert" hidden></p>
-    <button class="btn primary" id="auth-go">Увійти</button>
-    <button class="btn ghost" id="auth-guest">Спробувати без акаунта</button>
-    <p class="small muted" style="text-align:center">Без акаунта записи зберігаються лише в цьому браузері.</p>
-  </div>
+    <button class="btn primary" id="auth-go" type="submit">Увійти</button>
+    <button class="btn ghost" id="auth-guest" type="button">Спробувати без акаунта</button>
+    <p class="small muted center">Без акаунта записи зберігаються лише в цьому браузері.</p>
+  </form>
+</section>
+
+<!-- ЕКРАН: новий пароль (з посилання в листі) -->
+<section id="screen-reset" class="screen">
+  <form class="auth" id="reset-form" novalidate>
+    <div class="mark">
+      <svg viewBox="0 0 512 512" aria-hidden="true"><use href="#logo"/></svg>
+      <h1>Новий пароль</h1>
+      <p class="muted">Придумай новий пароль для входу.</p>
+    </div>
+    <label class="field"><span>Новий пароль</span><input type="password" id="reset-pass" autocomplete="new-password" placeholder="мінімум 6 символів"></label>
+    <p class="note error" id="reset-msg" role="alert" hidden></p>
+    <button class="btn primary" id="reset-go" type="submit">Зберегти пароль</button>
+  </form>
 </section>
 
 <!-- ЕКРАН: головна -->
@@ -60,11 +75,12 @@
         <button class="btn ghost" id="btn-ok">Сьогодні без болю</button>
         <button class="btn ghost" id="btn-past">Записати минулий</button>
       </div>
+      <button class="link center" id="btn-ok-other" type="button">Відмітити інший день без болю</button>
     </div>
 
     <div class="card risk" id="risk-card" data-level="">
       <div class="card-head"><span class="eyebrow">Прогноз</span><span class="small muted" id="risk-place"></span></div>
-      <div class="risk-top"><span class="risk-dot"></span><div><p class="small muted">Ризик на завтра</p><p class="risk-level" id="risk-level">—</p></div></div>
+      <div class="risk-top"><span class="risk-dot"></span><div><p class="small muted" id="risk-when">Ризик на завтра</p><p class="risk-level" id="risk-level">—</p></div></div>
       <p id="risk-why" class="small"></p>
       <div class="chips" id="risk-factors"></div>
       <div class="days3" id="risk-days"></div>
@@ -163,6 +179,31 @@
   <button class="tab" data-go="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Налаштування</button>
 </nav>
 
+<!-- смужка «немає зʼєднання» -->
+<div class="netbar" id="net-bar" role="status" hidden></div>
+
+<!-- лист: день без болю -->
+<dialog class="sheet" id="ok-sheet" aria-labelledby="ok-title">
+  <div class="sheet-body">
+    <div class="grabber"></div>
+    <div class="sheet-head"><h2 id="ok-title">День без болю</h2><button class="x-btn" data-close aria-label="Закрити">✕</button></div>
+    <label class="field"><span>Дата</span><input type="date" id="ok-day"></label>
+    <p class="note error" id="ok-err" role="alert" hidden></p>
+    <button class="btn primary" id="ok-save">Відмітити</button>
+  </div>
+</dialog>
+
+<!-- лист: підтвердження -->
+<dialog class="sheet" id="ask-sheet" aria-labelledby="ask-title">
+  <div class="sheet-body">
+    <div class="grabber"></div>
+    <h2 id="ask-title"></h2>
+    <p id="ask-text"></p>
+    <button class="btn primary" id="ask-yes"></button>
+    <button class="btn ghost" id="ask-no"></button>
+  </div>
+</dialog>
+
 <!-- лист: запис епізоду -->
 <dialog class="sheet" id="ep-sheet" aria-labelledby="ep-title">
   <div class="sheet-body">
@@ -183,6 +224,7 @@
     <div class="field"><span>Що могло спричинити</span><div class="chips" data-group="triggers"></div></div>
     <label class="switch"><span>Нудота</span><input type="checkbox" id="ep-nausea"></label>
     <label class="field"><span>Нотатка</span><textarea id="ep-note" placeholder="Що відчуваєш, що було напередодні…"></textarea></label>
+    <p class="note error" id="ep-err" role="alert" hidden></p>
     <button class="btn primary" id="ep-save">Зберегти</button>
     <button class="btn danger" id="ep-del" hidden>Видалити запис</button>
   </div>
@@ -208,7 +250,7 @@
   </symbol>
 </svg>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="vendor/supabase.min.js"></script>
 <script src="version.js"></script>
 <script src="config.js"></script>
 <script src="store.js"></script>

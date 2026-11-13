@@ -13,7 +13,8 @@
   --text:        #e5e5ea;
   --text-muted:  #8e8e93;
 
-  --accent:      #6d7cff;   /* Indigo, темна палітра Apple */
+  --accent:      #6d7cff;   /* Indigo, темна палітра Apple — для тексту й іконок */
+  --accent-fill: #5b67f0;   /* заливка кнопок: білий текст на ній ≥ 4.5:1 */
   --on-accent:   #ffffff;
   --accent-soft: rgba(109,124,255,.16);
 
@@ -39,7 +40,7 @@
     color-scheme: light;
     --bg:#f2f2f7; --surface:#ffffff; --surface-2:#f2f2f7; --fill:#e9e9ee; --border:#d1d1d6;
     --text:#1c1c1e; --text-muted:#6c6c70;
-    --accent:#6155f5; --on-accent:#ffffff; --accent-soft:rgba(97,85,245,.12);
+    --accent:#6155f5; --accent-fill:#6155f5; --on-accent:#ffffff; --accent-soft:rgba(97,85,245,.12);
     --ok:#248a3d; --risk-low:#248a3d; --risk-mid:#c93400; --risk-high:#d70015;
     --chart-muted:#d1d1d6; --chart-grid:#e5e5ea; --shadow:0 8px 30px rgba(0,0,0,.12); --seg-thumb:#ffffff;
   }
@@ -48,7 +49,7 @@
   color-scheme: light;
   --bg:#f2f2f7; --surface:#ffffff; --surface-2:#f2f2f7; --fill:#e9e9ee; --border:#d1d1d6;
   --text:#1c1c1e; --text-muted:#6c6c70;
-  --accent:#6155f5; --on-accent:#ffffff; --accent-soft:rgba(97,85,245,.12);
+  --accent:#6155f5; --accent-fill:#6155f5; --on-accent:#ffffff; --accent-soft:rgba(97,85,245,.12);
   --ok:#248a3d; --risk-low:#248a3d; --risk-mid:#c93400; --risk-high:#d70015;
   --chart-muted:#d1d1d6; --chart-grid:#e5e5ea; --shadow:0 8px 30px rgba(0,0,0,.12); --seg-thumb:#ffffff;
 }
@@ -99,7 +100,7 @@ h3{font-size:16px; font-weight:500}
 }
 .btn:active{transform:scale(.98)}
 .btn:focus-visible,.chip:focus-visible,.seg:focus-visible,.tab:focus-visible,.big-btn:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
-.btn.primary{background:var(--accent); color:var(--on-accent); width:100%}
+.btn.primary{background:var(--accent-fill); color:var(--on-accent); width:100%}
 .btn.primary:hover{filter:brightness(1.08)}
 .btn.ghost{border-color:var(--border); color:var(--text); width:100%}
 .btn.ghost:hover{border-color:var(--text-muted)}
@@ -111,18 +112,20 @@ h3{font-size:16px; font-weight:500}
 .row{display:flex; gap:12px; flex-wrap:wrap}
 .row > .btn{flex:1 1 140px; white-space:nowrap; padding-inline:16px}
 .link{color:var(--accent); font-size:14px; text-decoration:underline; text-underline-offset:3px; padding:4px 0}
+.link.center,.center{align-self:center; text-align:center}
+.link.center{min-height:44px; padding:10px 8px}
 
 /* велика кнопка «Болить зараз» */
 .big-btn{
   width:100%; aspect-ratio:1/1; max-width:200px; margin:8px auto 0; border-radius:50%;
-  background:radial-gradient(circle at 50% 35%, color-mix(in srgb,var(--accent) 85%,#fff 15%), var(--accent));
+  background:radial-gradient(circle at 50% 35%, color-mix(in srgb,var(--accent-fill) 92%,#fff 8%), var(--accent-fill));
   color:var(--on-accent); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
   box-shadow:0 0 0 10px var(--accent-soft), 0 0 0 22px color-mix(in srgb,var(--accent) 7%,transparent);
   transition:transform .15s;
 }
 .big-btn:active{transform:scale(.97)}
 .big-btn b{font-family:'Unbounded',sans-serif; font-size:24px; font-weight:700}
-.big-btn span{font-size:14px; opacity:.85}
+.big-btn span{font-size:14px}
 
 /* ——— сегментований контрол (iOS) ——— */
 .segmented{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; padding:2px; background:var(--fill); border-radius:10px; gap:2px}
@@ -168,7 +171,9 @@ h3{font-size:16px; font-weight:500}
 .risk[data-level=mid]{--risk-color:var(--risk-mid)}
 .risk[data-level=high]{--risk-color:var(--risk-high)}
 .days3{display:grid; grid-template-columns:repeat(3,1fr); gap:8px}
-.day3{background:var(--fill); border-radius:var(--r-sm); padding:10px 12px; display:flex; flex-direction:column; gap:2px; font-size:13px}
+.day3{background:var(--fill); border-radius:var(--r-sm); padding:10px 12px; display:flex; flex-direction:column; gap:2px; font-size:13px; text-align:left; border:1px solid transparent; min-height:56px}
+.day3[aria-pressed="true"]{border-color:var(--accent); background:var(--accent-soft)}
+.day3:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
 .day3 b{font-weight:600; font-size:14px}
 .day3 .lv{display:flex; align-items:center; gap:6px; color:var(--risk-color,var(--text-muted))}
 .day3 .lv::before{content:""; width:8px; height:8px; border-radius:50%; background:currentColor}
@@ -260,6 +265,13 @@ dialog.sheet::backdrop{background:rgba(0,0,0,.45)}
 dialog.sheet[open]{animation:up .25s cubic-bezier(.2,.8,.2,1)}
 @keyframes up{from{transform:translateY(40px); opacity:.4}}
 @media (prefers-reduced-motion:reduce){ dialog.sheet[open]{animation:none} .btn,.big-btn{transition:none} }
+
+/* ——— смужка «немає зʼєднання» ——— */
+.netbar{position:sticky; top:0; z-index:30; padding:calc(8px + env(safe-area-inset-top,0px)) 16px 8px; text-align:center; font-size:13px; background:color-mix(in srgb,var(--risk-mid) 18%,var(--bg)); color:var(--text); border-bottom:1px solid var(--border)}
+
+/* ——— день без болю в історії ——— */
+.item.ok-item .date b{color:var(--ok)}
+.int.ok{background:color-mix(in srgb,var(--ok) 25%,var(--fill)); color:var(--text)}
 
 /* ——— тост ——— */
 .toast{position:fixed; left:50%; bottom:calc(100px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%); z-index:50; background:var(--text); color:var(--bg); padding:10px 18px; border-radius:99px; font-size:14px; font-weight:500; box-shadow:var(--shadow); max-width:calc(100% - 32px); text-align:center}

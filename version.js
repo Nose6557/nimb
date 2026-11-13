@@ -1,4 +1,4 @@
 /* version.js — єдине джерело версії оболонки. Звідси бере CACHE service worker.
    Змінився будь-який статичний файл — бампни NIMB_VERSION. */
-const NIMB_VERSION = "2";
-const NIMB_RELEASED = "2026-10-17";
+const NIMB_VERSION = "3";
+const NIMB_RELEASED = "2026-11-13";

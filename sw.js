@@ -4,7 +4,7 @@
    Бампни NIMB_VERSION у version.js — старий кеш видалиться сам. */
 importScripts("version.js");
 const CACHE = "nimb-v" + NIMB_VERSION;
-const SHELL = [".", "index.html", "style.css", "version.js", "config.js", "store.js", "tags.js", "env.js", "charts.js", "app.js", "manifest.json", "favicon/icon.svg", "favicon/icon-192.png", "favicon/icon-512.png"];
+const SHELL = [".", "index.html", "style.css", "vendor/supabase.min.js", "version.js", "config.js", "store.js", "tags.js", "env.js", "charts.js", "app.js", "manifest.json", "favicon/icon.svg", "favicon/icon-192.png", "favicon/icon-512.png", "favicon/icon-maskable-512.png", "favicon/icon-180.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

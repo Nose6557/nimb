@@ -8,7 +8,7 @@
 
 ## Стек
 - Чистий HTML/CSS/JS без збірки і фреймворків, як у NIVO. Модулів і бандлера не додавати.
-- Порядок скриптів: `version.js` → `config.js` → `store.js` → `tags.js` → `env.js` → `charts.js` → `app.js`.
+- Порядок скриптів: `vendor/supabase.min.js` (supabase-js 2.45.4, лежить у репо, щоб працювало офлайн) → `version.js` → `config.js` → `store.js` → `tags.js` → `env.js` → `charts.js` → `app.js`.
 - Дані — тільки через `store.js`. У `config.js` лише publishable-ключ, секретів у репо немає.
 - Кольори — лише через семантичні токени в `style.css`. Нова тема = нові значення тих самих токенів.
 

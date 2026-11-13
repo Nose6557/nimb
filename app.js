@@ -17,9 +17,28 @@
   const WD = ["Понеділок", "Вівторок", "Середа", "Четвер", "Пʼятниця", "Субота", "Неділя"];
   const WD_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"];
   const durText = (ms) => { const m = Math.max(0, Math.round(ms / 6e4)); const h = Math.floor(m / 60); return h ? `${h} год ${m % 60} хв` : `${m} хв`; };
+  // Тост кладемо у відкритий лист, інакше лист (верхній шар) його перекриває.
   function toast(text) {
     const t = document.createElement("div"); t.className = "toast"; t.textContent = text; t.setAttribute("role", "status");
-    document.body.appendChild(t); setTimeout(() => t.remove(), 2600);
+    const host = [...document.querySelectorAll("dialog[open]")].pop() || document.body;
+    host.appendChild(t); setTimeout(() => t.remove(), 2600);
+  }
+  // Українська множина: pl(5, "запис", "записи", "записів") → "5 записів".
+  const PR = new Intl.PluralRules("uk");
+  const pl = (n, one, few, many) => `${n} ${{ one, few, many, other: few }[PR.select(n)] || many}`;
+  // Помилка всередині листа — під полями, поруч із кнопкою.
+  function sheetErr(id, text) { const m = $(id); m.textContent = text || ""; m.hidden = !text; }
+  // Своє підтвердження замість confirm(): повертає true / false.
+  function ask(title, text, yes, no) {
+    return new Promise((res) => {
+      const d = $("#ask-sheet"); let done = false;
+      const end = (v) => { if (done) return; done = true; if (d.open) d.close(); res(v); };
+      $("#ask-title").textContent = title; $("#ask-text").textContent = text;
+      $("#ask-yes").textContent = yes; $("#ask-no").textContent = no;
+      $("#ask-yes").onclick = () => end(true); $("#ask-no").onclick = () => end(false);
+      d.addEventListener("close", () => end(false), { once: true });
+      d.showModal();
+    });
   }
   function busy(btn, on) { btn.classList.toggle("loading", on); btn.disabled = on; }
   function fail(e) { console.error(e); toast(e && e.message ? e.message : "Щось пішло не так"); }
@@ -38,7 +57,7 @@
   function go(name) {
     $$(".screen").forEach((s) => s.classList.toggle("active", s.id === "screen-" + name));
     $$(".tab").forEach((t) => t.classList.toggle("active", t.dataset.go === name));
-    const app = name !== "auth";
+    const app = name !== "auth" && name !== "reset";
     $("#tabs").hidden = !app; document.body.classList.toggle("no-tabs", !app);
     if (name === "stats") renderStats();
     window.scrollTo(0, 0);
@@ -51,24 +70,69 @@
     authTab = b.dataset.authtab;
     $$("[data-authtab]").forEach((x) => { x.classList.toggle("active", x === b); x.setAttribute("aria-selected", x === b); });
     $("#auth-go").textContent = authTab === "in" ? "Увійти" : "Створити акаунт";
+    $("#auth-forgot").hidden = authTab !== "in";
     $("#auth-pass").autocomplete = authTab === "in" ? "current-password" : "new-password";
     $("#auth-msg").hidden = true;
   }));
   function authMsg(text, ok) { const m = $("#auth-msg"); m.textContent = text; m.className = "note " + (ok ? "ok" : "error"); m.hidden = false; }
-  $("#auth-go").addEventListener("click", async () => {
+  // Помилки Supabase → зрозумілі тексти українською.
+  function authText(e) {
+    const m = String((e && e.message) || e);
+    if (/invalid login/i.test(m)) return "Невірна пошта або пароль.";
+    if (/not confirmed/i.test(m)) return "Спершу підтвердь пошту за посиланням з листа.";
+    if (/already registered|already exists/i.test(m)) return "Акаунт з цією поштою вже є. Перейди на «Вхід».";
+    if (/rate limit|too many|seconds/i.test(m)) return "Забагато спроб. Зачекай хвилину й спробуй ще раз.";
+    if (/password.*(at least|short|weak)|weak password/i.test(m)) return "Пароль заслабкий. Візьми довший, з цифрами й літерами.";
+    if (/same password|different from the old/i.test(m)) return "Новий пароль має відрізнятися від старого.";
+    if (/invalid.*email|email.*invalid/i.test(m)) return "Перевір адресу пошти.";
+    if (/fetch|network|failed to/i.test(m) || !navigator.onLine) return "Немає зʼєднання з сервером. Перевір інтернет.";
+    return "Не вдалося. Спробуй ще раз. (" + m + ")";
+  }
+  $("#auth-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    $("#auth-msg").hidden = true;
     const email = $("#auth-email").value.trim(), pass = $("#auth-pass").value;
     if (!/^\S+@\S+\.\S+$/.test(email)) return authMsg("Перевір адресу пошти.");
     if (pass.length < 6) return authMsg("Пароль — щонайменше 6 символів.");
     const btn = $("#auth-go"); busy(btn, true);
     try {
       if (authTab === "in") await Store.signIn(email, pass);
-      else { const r = await Store.signUp(email, pass); if (r.needsConfirm) { busy(btn, false); return authMsg("Лист з підтвердженням уже на пошті. Відкрий посилання й увійди.", true); } }
-      const moved = await Store.migrateGuest().catch(() => 0);
-      if (moved) toast(`Перенесено записів з браузера: ${moved}`);
+      else {
+        const r = await Store.signUp(email, pass);
+        if (r.needsConfirm) { busy(btn, false); return authMsg("Лист з підтвердженням уже на пошті. Відкрий посилання й увійди. Якщо акаунт з цією поштою вже є — просто увійди.", true); }
+      }
+      await offerMigrate();
       await enter();
     } catch (e) {
-      authMsg(/invalid login/i.test(e.message) ? "Невірна пошта або пароль." : /not confirmed/i.test(e.message) ? "Спершу підтвердь пошту за посиланням з листа." : e.message);
+      authMsg(authText(e));
     } finally { busy(btn, false); }
+  });
+  // Записи гостя переносимо в акаунт лише за згодою.
+  async function offerMigrate() {
+    const n = Store.guestCount();
+    if (!n) return;
+    const yes = await ask("Перенести записи?", `У цьому браузері є ${pl(n, "запис", "записи", "записів")} без акаунта. Перенести в акаунт ${Store.user.email}?`, "Перенести", "Ні, залишити в браузері");
+    if (!yes) return;
+    try { const moved = await Store.migrateGuest(); if (moved) toast(`Перенесено: ${pl(moved, "запис", "записи", "записів")}`); }
+    catch (e) { toast("Не вдалося перенести записи. Вони лишились у браузері."); }
+  }
+  $("#auth-forgot").addEventListener("click", async () => {
+    const email = $("#auth-email").value.trim();
+    if (!/^\S+@\S+\.\S+$/.test(email)) { $("#auth-email").focus(); return authMsg("Впиши пошту, на яку зареєстровано акаунт, і натисни ще раз."); }
+    const btn = $("#auth-forgot"); btn.disabled = true;
+    try { await Store.resetPassword(email); authMsg("Якщо акаунт з цією поштою є, лист із посиланням для нового пароля вже в дорозі.", true); }
+    catch (e) { authMsg(authText(e)); }
+    finally { btn.disabled = false; }
+  });
+  $("#reset-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const pass = $("#reset-pass").value, msg = $("#reset-msg");
+    msg.hidden = true;
+    if (pass.length < 6) { msg.textContent = "Пароль — щонайменше 6 символів."; msg.hidden = false; return; }
+    const btn = $("#reset-go"); busy(btn, true);
+    try { await Store.updatePassword(pass); history.replaceState(null, "", location.pathname); toast("Пароль змінено"); await enter(); }
+    catch (e) { msg.textContent = authText(e); msg.hidden = false; }
+    finally { busy(btn, false); }
   });
   $("#auth-guest").addEventListener("click", () => { Store.useGuest(); enter(); });
 
@@ -78,13 +142,14 @@
     S.prefs = await Store.pullPrefs().catch(() => Store.prefs());
     applyTheme(S.prefs.theme);
     renderSettings();
+    renderRisk();
     await reload();
     loadEnv();
   }
   async function reload() {
     try { [S.episodes, S.okDays] = await Promise.all([Store.list(), Store.okDays()]); }
     catch (e) { fail(e); }
-    renderHome(); renderHistory();
+    renderHome(); renderHistory(); renderNet();
     if (Object.keys(S.env).length) { S.model = Env.analyze(S.episodes, S.env); renderRisk(); }
     if ($("#screen-stats").classList.contains("active")) renderStats();
   }
@@ -102,10 +167,13 @@
   }
 
   /* ---------- головна ---------- */
-  function activeEpisode() {
-    const e = S.episodes.find((x) => !x.ended_at);
-    return e && Date.now() - new Date(e.started_at) < 48 * 3600e3 ? e : null;
-  }
+  // «Болить зараз» — лише запис, створений кнопкою «Болить» (створено ≈ тоді ж, коли почалось),
+  // без «Минуло» і не старший за 48 год. Минулий запис без кінця не стає активним.
+  const isLive = (x) => {
+    const c = x.created_at ? +new Date(x.created_at) : NaN, st = +new Date(x.started_at);
+    return !x.ended_at && Number.isFinite(c) && Math.abs(c - st) < 15 * 6e4 && Date.now() - st < 48 * 3600e3;
+  };
+  function activeEpisode() { return S.episodes.find(isLive) || null; }
   let timerId = null;
   function renderHome() {
     const d = new Date();
@@ -145,7 +213,7 @@
     const hadToday = S.episodes.some((e) => dayKey(new Date(e.started_at)) === t);
     const okb = $("#btn-ok");
     okb.disabled = hadToday;
-    okb.textContent = S.okDays.includes(t) ? "✓ Сьогодні без болю" : "Сьогодні без болю";
+    okb.textContent = hadToday ? "Сьогодні вже є запис болю" : S.okDays.includes(t) ? "✓ Сьогодні без болю" : "Сьогодні без болю";
     okb.style.opacity = hadToday ? ".45" : "";
     renderList($("#recent-list"), S.episodes.slice(0, 3), true);
   }
@@ -164,12 +232,32 @@
     catch (e) { fail(e); }
   });
   $("#btn-past").addEventListener("click", () => openSheet(null, { title: "Минулий епізод" }));
+  // Інший день без болю (минулі дні теж).
+  $("#btn-ok-other").addEventListener("click", () => {
+    const inp = $("#ok-day"); inp.max = today(); inp.value = shift(today(), -1);
+    sheetErr("#ok-err", ""); $("#ok-sheet").showModal();
+  });
+  $("#ok-save").addEventListener("click", async () => {
+    const d = $("#ok-day").value;
+    if (!d) return sheetErr("#ok-err", "Вибери дату.");
+    if (d > today()) return sheetErr("#ok-err", "Майбутній день відмітити не можна.");
+    if (S.episodes.some((e) => dayKey(new Date(e.started_at)) === d)) return sheetErr("#ok-err", "На цей день уже є запис болю. Спершу видали його в Історії.");
+    if (S.okDays.includes(d)) return sheetErr("#ok-err", "Цей день уже відмічено.");
+    const btn = $("#ok-save"); busy(btn, true);
+    try { await Store.markOk(d); $("#ok-sheet").close(); await reload(); toast("Відмічено день без болю"); }
+    catch (e) { sheetErr("#ok-err", e.message || "Не вдалося зберегти."); }
+    finally { busy(btn, false); }
+  });
 
+  // Який день показує прогноз: 0 — сьогодні, 1 — завтра, 2 — післязавтра. Увечері за замовчуванням — завтра.
+  S.riskDay = new Date().getHours() < 18 ? 0 : 1;
+  const dayName = (i, k) => { const dt = new Date(k + "T12:00:00"); return i === 0 ? "Сьогодні" : i === 1 ? "Завтра" : WD_SHORT[(dt.getDay() + 6) % 7] + ", " + dt.getDate(); };
   function renderRisk() {
     const card = $("#risk-card");
-    const m = S.model, t = today();
+    const m = S.model, t = today(), sel = shift(t, S.riskDay);
     $("#risk-place").textContent = S.place ? (S.place.name || "Твоє місце") + (S.place.how === "default" ? " · за замовчуванням" : "") : "";
-    const r = Env.riskFor(S.env[shift(t, 1)], m);
+    $("#risk-when").textContent = S.riskDay === 0 ? "Ризик сьогодні" : S.riskDay === 1 ? "Ризик на завтра" : "Ризик: " + WD[(new Date(sel + "T12:00:00").getDay() + 6) % 7].toLowerCase();
+    const r = m ? Env.riskFor(S.env[sel], m) : null;
     const why = $("#risk-why"), chips = $("#risk-factors"), days = $("#risk-days"), line = $("#env-line"), note = $("#risk-note");
     chips.innerHTML = ""; days.innerHTML = ""; line.innerHTML = "";
     if (!r) {
@@ -180,18 +268,20 @@
     card.dataset.level = r.level;
     $("#risk-level").textContent = Env.LEVEL[r.level];
     why.textContent = r.level !== "low"
-      ? `У такі дні болить у ${fmtN(r.mult, 1)} раза частіше, ніж зазвичай.`
+      ? `${r.factors.map((f) => f.label).join(", ")}. У такі дні болить у ${fmtN(r.mult, 1)} раза частіше, ніж зазвичай.`
       : r.factors.length ? "Ризик майже такий, як у звичайний день." : "Нічого незвичного в погоді на завтра.";
     r.factors.forEach((f) => { const c = document.createElement("span"); c.className = "chip static"; c.textContent = f.label; chips.appendChild(c); });
     [0, 1, 2].forEach((i) => {
       const k = shift(t, i), rr = Env.riskFor(S.env[k], m);
-      const d = document.createElement("div"); d.className = "day3"; if (rr) d.dataset.level = rr.level;
-      const dt = new Date(k + "T12:00:00");
-      d.innerHTML = `<b>${i === 0 ? "Сьогодні" : i === 1 ? "Завтра" : WD_SHORT[(dt.getDay() + 6) % 7] + ", " + dt.getDate()}</b><span class="lv"></span>`;
+      const d = document.createElement("button"); d.type = "button"; d.className = "day3"; if (rr) d.dataset.level = rr.level;
+      d.setAttribute("aria-pressed", i === S.riskDay);
+      d.innerHTML = `<b></b><span class="lv"></span>`;
+      d.querySelector("b").textContent = dayName(i, k);
       d.querySelector(".lv").textContent = rr ? Env.LEVEL[rr.level] : "—";
+      d.onclick = () => { S.riskDay = i; renderRisk(); };
       days.appendChild(d);
     });
-    const e = S.env[shift(t, 1)];
+    const e = S.env[sel] || {};
     const bits = [];
     if (e.pressure_mean != null) bits.push(["Тиск", `${fmtN(e.pressure_mean)} гПа` + (e.pressure_delta != null ? ` (${e.pressure_delta > 0 ? "+" : ""}${fmtN(e.pressure_delta, 1)})` : "")]);
     if (e.temp_max != null) bits.push(["Макс.", `${fmtN(e.temp_max)}°`]);
@@ -217,7 +307,7 @@
   }
   function renderList(box, items, compact) {
     box.innerHTML = "";
-    if (!items.length) { box.innerHTML = `<p class="empty">${compact ? "Поки немає записів. Коли заболить — тисни «Болить»." : "Нічого не знайшов"}</p>`; return; }
+    if (!items.length) { box.innerHTML = `<p class="empty">${Store.stale && !S.episodes.length ? "Не вдалося завантажити записи. Перевір інтернет." : compact ? "Поки немає записів. Коли заболить — тисни «Болить»." : "Нічого не знайшов"}</p>`; return; }
     items.forEach((e) => {
       const d = new Date(e.started_at);
       const b = document.createElement("button"); b.className = "item";
@@ -235,23 +325,44 @@
   }
 
   /* ---------- історія ---------- */
+  // Рядок «день без болю» в історії. Тап — прибрати відмітку.
+  function okRow(day) {
+    const d = new Date(day + "T12:00:00");
+    const b = document.createElement("button"); b.className = "item ok-item";
+    b.innerHTML = `<span class="date"><b></b><span></span></span><span class="what"><b>Без болю</b><p></p></span><span class="int ok" aria-hidden="true">✓</span>`;
+    b.querySelector(".date b").textContent = d.getDate();
+    b.querySelector(".date span").textContent = MON_SHORT[d.getMonth()];
+    b.onclick = async () => {
+      if (!(await ask("Прибрати відмітку?", `${d.getDate()} ${MON_SHORT[d.getMonth()]} — день без болю. Прибрати цю відмітку?`, "Прибрати", "Залишити"))) return;
+      try { await Store.unmarkOk(day); await reload(); toast("Відмітку прибрано"); } catch (e) { fail(e); }
+    };
+    return b;
+  }
   function renderHistory() {
     const q = $("#hist-q").value.trim().toLowerCase();
-    const items = S.episodes.filter((e) => !q || [e.note, epTitle(e), ...(e.triggers || []).map((x) => T.triggers[x])].join(" ").toLowerCase().includes(q));
-    $("#hist-count").textContent = S.episodes.length ? `${S.episodes.length} записів` : "";
+    const eps = S.episodes.filter((e) => !q || [e.note, epTitle(e), ...(e.triggers || []).map((x) => T.triggers[x])].join(" ").toLowerCase().includes(q));
+    const oks = !q || "без болю".includes(q) ? S.okDays.slice() : [];
+    // Один список: епізоди й дні без болю, від нових до старих.
+    const items = [...eps.map((e) => ({ at: e.started_at, e })), ...oks.map((day) => ({ at: new Date(day + "T12:00:00").toISOString(), ok: day }))]
+      .sort((a, b) => (a.at < b.at ? 1 : -1));
+    const bits = [];
+    if (S.episodes.length) bits.push(pl(S.episodes.length, "запис", "записи", "записів"));
+    if (S.okDays.length) bits.push(pl(S.okDays.length, "день", "дні", "днів") + " без болю");
+    $("#hist-count").textContent = bits.join(" · ");
     const box = $("#hist-list"); box.innerHTML = "";
-    if (!items.length) { box.innerHTML = `<p class="empty">${S.episodes.length ? "Нічого не знайшов" : "Поки немає записів. Можна імпортувати щоденник у Налаштуваннях."}</p>`; return; }
+    if (!items.length) { box.innerHTML = `<p class="empty">${Store.stale && !S.episodes.length ? "Не вдалося завантажити записи. Перевір інтернет." : S.episodes.length || S.okDays.length ? "Нічого не знайшов" : "Поки немає записів. Можна імпортувати щоденник у Налаштуваннях."}</p>`; return; }
     let cur = null, list = null;
-    items.forEach((e) => {
-      const d = new Date(e.started_at), k = d.getFullYear() + "-" + d.getMonth();
+    items.forEach((it) => {
+      const d = new Date(it.at), k = d.getFullYear() + "-" + d.getMonth();
       if (k !== cur) {
         cur = k;
-        const n = items.filter((x) => { const y = new Date(x.started_at); return y.getFullYear() + "-" + y.getMonth() === k; }).length;
+        const n = items.filter((x) => x.e && (() => { const y = new Date(x.at); return y.getFullYear() + "-" + y.getMonth() === k; })()).length;
         const h = document.createElement("p"); h.className = "month-h"; h.textContent = `${MON_FULL[d.getMonth()]} ${d.getFullYear()} · ${n}`;
         list = document.createElement("div"); list.className = "list";
         box.append(h, list);
       }
-      const tmp = document.createElement("div"); renderList(tmp, [e]); list.appendChild(tmp.firstChild);
+      if (it.ok) { list.appendChild(okRow(it.ok)); return; }
+      const tmp = document.createElement("div"); renderList(tmp, [it.e]); list.appendChild(tmp.firstChild);
     });
   }
   $("#hist-q").addEventListener("input", renderHistory);
@@ -302,6 +413,7 @@
     chipGroup("sides", T.sides); chipGroup("meds", T.meds); chipGroup("relief", T.relief, { single: true }); chipGroup("triggers", T.triggers);
     $("#ep-relief-f").hidden = !form.meds.length;
     $("#ep-del").hidden = !editing;
+    sheetErr("#ep-err", "");
     sheet.showModal();
   }
   $("#ep-int").addEventListener("input", (ev) => { intTouched = true; $("#ep-int-v").textContent = ev.target.value; });
@@ -313,7 +425,9 @@
   $("#ep-save").addEventListener("click", async () => {
     const start = fromLocalInput($("#ep-start").value) || new Date().toISOString();
     let end = fromLocalInput($("#ep-end").value);
-    if (end && end < start) return toast("Кінець раніше за початок");
+    sheetErr("#ep-err", "");
+    if (end && end < start) return sheetErr("#ep-err", "«Минуло» раніше, ніж «Почалося». Перевір час.");
+    if (start > new Date(Date.now() + 5 * 6e4).toISOString()) return sheetErr("#ep-err", "Початок у майбутньому. Перевір дату й час.");
     const data = {
       ...form, started_at: start, ended_at: end,
       onset: editing && editing.started_at === start && form.onset ? form.onset : Tags.onsetOf(new Date(start)),
@@ -326,11 +440,11 @@
       if (editing) await Store.update(editing.id, data); else await Store.add(data);
       const d = dayKey(new Date(start)); if (S.okDays.includes(d)) await Store.unmarkOk(d);
       sheet.close(); await reload(); toast("Збережено");
-    } catch (e) { fail(e); } finally { busy(btn, false); }
+    } catch (e) { console.error(e); sheetErr("#ep-err", "Не вдалося зберегти. " + (e.message || "")); } finally { busy(btn, false); }
   });
   $("#ep-del").addEventListener("click", async () => {
-    if (!editing || !confirm("Видалити цей запис?")) return;
-    try { await Store.remove(editing.id); sheet.close(); await reload(); toast("Видалено"); } catch (e) { fail(e); }
+    if (!editing || !(await ask("Видалити запис?", "Запис зникне з історії й статистики.", "Видалити", "Залишити"))) return;
+    try { await Store.remove(editing.id); sheet.close(); await reload(); toast("Видалено"); } catch (e) { sheetErr("#ep-err", "Не вдалося видалити. " + (e.message || "")); }
   });
 
   /* ---------- статистика ---------- */
@@ -466,7 +580,11 @@
     }, 350);
   });
   $("#acc-btn").addEventListener("click", async () => {
-    if (Store.mode === "supabase" && !confirm("Вийти з акаунта?")) return;
+    if (Store.mode === "supabase") {
+      const p = Store.pending;
+      const text = p ? `${pl(p, "зміна ще не відправлена", "зміни ще не відправлені", "змін ще не відправлено")} — після виходу вони зникнуть.` : "Записи залишаться в акаунті. З цього браузера їх буде прибрано.";
+      if (!(await ask("Вийти з акаунта?", text, "Вийти", "Залишитися"))) return;
+    }
     await Store.signOut();
     S.episodes = []; S.okDays = [];
     go("auth");
@@ -482,7 +600,8 @@
       const have = new Set(S.episodes.map((e) => dayKey(new Date(e.started_at))));
       pending = rows.map((r) => ({ ...r, dup: have.has(dayKey(new Date(r.started_at))) }));
       const fresh = pending.filter((r) => !r.dup).length;
-      $("#imp-sum").textContent = `Знайшов ${pending.length} записів. Нових: ${fresh}.` + (pending.length - fresh ? ` На ${pending.length - fresh} дат вже є запис — їх пропущу.` : "");
+      const dups = pending.length - fresh;
+      $("#imp-sum").textContent = `Знайшов ${pl(pending.length, "запис", "записи", "записів")}. Нових: ${fresh}.` + (dups ? ` ${pl(dups, "запис припадає", "записи припадають", "записів припадають")} на дати, де вже є запис, — їх пропущу.` : "");
       const tb = $("#imp-rows"); tb.innerHTML = "";
       pending.slice().reverse().forEach((r) => {
         const tr = document.createElement("tr"); if (r.dup) tr.className = "dup";
@@ -500,7 +619,7 @@
     const btn = $("#imp-go"); busy(btn, true);
     try {
       const n = await Store.addMany(pending.filter((r) => !r.dup).map(({ dup, ...r }) => r));
-      $("#imp-sheet").close(); await reload(); toast(`Імпортовано ${n} записів`); loadEnv();
+      $("#imp-sheet").close(); await reload(); toast(`Імпортовано: ${pl(n, "запис", "записи", "записів")}`); loadEnv();
     } catch (e) { fail(e); } finally { busy(btn, false); }
   });
 
@@ -529,9 +648,29 @@
     download(`nimb-${stamp()}.json`, JSON.stringify({ app: "NIMB", version: NIMB_VERSION, exported_at: new Date().toISOString(), episodes: S.episodes.slice().reverse(), ok_days: S.okDays.slice().sort() }, null, 2), "application/json");
   });
 
+  /* ---------- зʼєднання ---------- */
+  function renderNet() {
+    const bar = $("#net-bar"), p = Store.pending;
+    if (Store.mode !== "supabase" || (navigator.onLine && !Store.stale && !p)) { bar.hidden = true; return; }
+    bar.textContent = !navigator.onLine
+      ? "Немає зʼєднання. Нові записи збережуться тут і відправляться, коли зʼявиться інтернет." + (p ? ` Чекають: ${p}.` : "")
+      : p ? `Відправляю зміни: ${p}…` : "Сервер недоступний. Показую збережені записи.";
+    bar.hidden = false;
+  }
+  window.addEventListener("offline", renderNet);
+  window.addEventListener("online", async () => { renderNet(); if (Store.mode === "supabase") { await Store.flush().catch(() => {}); await reload(); loadEnv(); } });
+
   /* ---------- старт ---------- */
   applyTheme(S.prefs.theme);
   window.addEventListener("resize", () => { if ($("#screen-stats").classList.contains("active")) renderStats(); });
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && Store.mode !== "none") renderHome(); });
-  Store.init().then((mode) => (mode === "none" ? go("auth") : enter()));
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden || Store.mode === "none") return;
+    renderHome();
+    if (Store.pending && navigator.onLine) Store.flush().then(reload, () => {});
+  });
+  if (Store.recovery) {
+    // Відкрито посилання «новий пароль» з листа.
+    go("reset");
+    Store.recoverySession().then((ok) => { if (!ok) { go("auth"); authMsg("Посилання застаріло або вже використане. Попроси новий лист: «Забув пароль?»."); } });
+  } else Store.init().then((mode) => (mode === "none" ? go("auth") : enter()));
 })();
