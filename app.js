@@ -668,7 +668,12 @@
   });
   $("#delacc-btn").addEventListener("click", async () => {
     if (!(await ask("Видалити акаунт?", `Акаунт ${Store.user.email} і всі його записи буде видалено назавжди. Скасувати не можна.`, "Видалити акаунт", "Скасувати"))) return;
-    try { await Store.deleteAccount(); S.episodes = []; S.okDays = []; go("auth"); authMsg("Акаунт видалено.", true); } catch (e) { fail(e); }
+    try { await Store.deleteAccount(); S.episodes = []; S.okDays = []; go("auth"); authMsg("Акаунт видалено.", true); }
+    catch (e) {
+      // Функції delete_my_account ще немає в базі (міграцію 002 не застосовано) — нічого не видалено.
+      if (/delete_my_account|PGRST202|could not find the function/i.test(String((e && (e.message || e.code)) || e))) toast("Видалення акаунта поки недоступне. Нічого не видалено.");
+      else fail(e);
+    }
   });
 
   /* ---------- імпорт ---------- */
