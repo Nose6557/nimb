@@ -309,8 +309,6 @@ dialog.sheet[open]{animation:up .25s cubic-bezier(.2,.8,.2,1)}
 .netbar{position:sticky; top:0; z-index:30; padding:calc(8px + env(safe-area-inset-top,0px)) 16px 8px; text-align:center; font-size:var(--fs-s); background:color-mix(in srgb,var(--risk-mid) 18%,var(--bg)); color:var(--text); border-bottom:1px solid var(--border)}
 
 /* ——— день без болю в історії ——— */
-.item.ok-item .date b{color:var(--ok)}
-.int.ok{background:color-mix(in srgb,var(--ok) 25%,var(--fill)); color:var(--text)}
 
 /* ——— тост ——— */
 .toast{position:fixed; left:50%; bottom:calc(100px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%); z-index:50; background:var(--text); color:var(--bg); padding:10px 18px; border-radius:99px; font-size:var(--fs-m); font-weight:500; box-shadow:var(--shadow); max-width:calc(100% - 32px); text-align:center}

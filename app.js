@@ -281,12 +281,6 @@
       // Перші 10 хвилин можна прибрати випадковий запис без питань.
       if (Date.now() - new Date(a.created_at || a.started_at) < 10 * 6e4) { $("#a-undo").hidden = false; $("#a-undo").onclick = () => undoPain(a.id); }
     }
-    const t = today();
-    const hadToday = S.episodes.some((e) => dayKey(new Date(e.started_at)) === t);
-    const okb = $("#btn-ok");
-    okb.disabled = hadToday;
-    okb.textContent = hadToday ? "Сьогодні вже є запис болю" : S.okDays.includes(t) ? "✓ Сьогодні без болю" : "Сьогодні без болю";
-
     renderList($("#recent-list"), S.episodes.slice(0, 3), true);
   }
   $("#btn-pain").addEventListener("click", async () => {
@@ -323,28 +317,7 @@
     if (endEp) { await saveEp(endEp.id, { ...endEp, intensity: endInt, relief: endEp.meds && endEp.meds.length ? endRel : null }); toast("Збережено"); }
   });
   $("#end-skip").addEventListener("click", () => $("#end-sheet").close());
-  $("#btn-ok").addEventListener("click", async () => {
-    const t = today();
-    try { if (S.okDays.includes(t)) await Store.unmarkOk(t); else { await Store.markOk(t); toast("Відмічено. Такі дні роблять прогноз точнішим"); } await reload(); }
-    catch (e) { fail(e); }
-  });
   $("#btn-past").addEventListener("click", () => openSheet(null, { title: "Минулий епізод" }));
-  // Інший день без болю (минулі дні теж).
-  $("#btn-ok-other").addEventListener("click", () => {
-    const inp = $("#ok-day"); inp.max = today(); inp.value = shift(today(), -1);
-    sheetErr("#ok-err", ""); $("#ok-sheet").showModal();
-  });
-  $("#ok-save").addEventListener("click", async () => {
-    const d = $("#ok-day").value;
-    if (!d) return sheetErr("#ok-err", "Вибери дату.");
-    if (d > today()) return sheetErr("#ok-err", "Майбутній день відмітити не можна.");
-    if (S.episodes.some((e) => dayKey(new Date(e.started_at)) === d)) return sheetErr("#ok-err", "На цей день уже є запис болю. Спершу видали його в Історії.");
-    if (S.okDays.includes(d)) return sheetErr("#ok-err", "Цей день уже відмічено.");
-    const btn = $("#ok-save"); busy(btn, true);
-    try { await Store.markOk(d); $("#ok-sheet").close(); await reload(); toast("Відмічено день без болю"); }
-    catch (e) { sheetErr("#ok-err", e.message || "Не вдалося зберегти."); }
-    finally { busy(btn, false); }
-  });
 
   // Який день показує прогноз: 0 — сьогодні, 1 — завтра, 2 — післязавтра. Увечері за замовчуванням — завтра.
   S.riskDay = new Date().getHours() < 18 ? 0 : 1;
@@ -423,19 +396,6 @@
   }
 
   /* ---------- історія ---------- */
-  // Рядок «день без болю» в історії. Тап — прибрати відмітку.
-  function okRow(day) {
-    const d = new Date(day + "T12:00:00");
-    const b = document.createElement("button"); b.className = "item ok-item";
-    b.innerHTML = `<span class="date"><b></b><span></span></span><span class="what"><b>Без болю</b><p></p></span><span class="int ok" aria-hidden="true">✓</span>`;
-    b.querySelector(".date b").textContent = d.getDate();
-    b.querySelector(".date span").textContent = MON_SHORT[d.getMonth()];
-    b.onclick = async () => {
-      if (!(await ask("Прибрати відмітку?", `${d.getDate()} ${MON_SHORT[d.getMonth()]} — день без болю. Прибрати цю відмітку?`, "Прибрати", "Залишити"))) return;
-      try { await Store.unmarkOk(day); await reload(); toast("Відмітку прибрано"); } catch (e) { fail(e); }
-    };
-    return b;
-  }
   let histF = "";
   $$("#hist-f .chip").forEach((b) => b.addEventListener("click", () => {
     histF = b.dataset.f;
@@ -445,17 +405,11 @@
   function renderHistory() {
     const q = $("#hist-q").value.trim().toLowerCase();
     const fOk = (e) => histF === "" || (histF === "strong" && e.intensity >= 7) || (histF === "meds" && e.meds && e.meds.length);
-    const eps = histF === "ok" ? [] : S.episodes.filter((e) => fOk(e) && (!q || [e.note, epTitle(e), ...(e.triggers || []).map((x) => T.triggers[x])].join(" ").toLowerCase().includes(q)));
-    const oks = (histF === "" || histF === "ok") && (!q || "без болю".includes(q)) ? S.okDays.slice() : [];
-    // Один список: епізоди й дні без болю, від нових до старих.
-    const items = [...eps.map((e) => ({ at: e.started_at, e })), ...oks.map((day) => ({ at: new Date(day + "T12:00:00").toISOString(), ok: day }))]
-      .sort((a, b) => (a.at < b.at ? 1 : -1));
-    const bits = [];
-    if (S.episodes.length) bits.push(pl(S.episodes.length, "запис", "записи", "записів"));
-    if (S.okDays.length) bits.push(pl(S.okDays.length, "день", "дні", "днів") + " без болю");
-    $("#hist-count").textContent = bits.join(" · ");
+    // Дні без запису — дні без болю, окремо їх не показуємо.
+    const items = S.episodes.filter((e) => fOk(e) && (!q || [e.note, epTitle(e), ...(e.triggers || []).map((x) => T.triggers[x])].join(" ").toLowerCase().includes(q))).map((e) => ({ at: e.started_at, e }));
+    $("#hist-count").textContent = S.episodes.length ? pl(S.episodes.length, "запис", "записи", "записів") : "";
     const box = $("#hist-list"); box.innerHTML = "";
-    if (!items.length) { box.innerHTML = `<p class="empty">${Store.stale && !S.episodes.length ? "Не вдалося завантажити записи. Перевір інтернет." : S.episodes.length || S.okDays.length ? "Нічого не знайшов" : "Поки немає записів. Можна імпортувати щоденник у Налаштуваннях."}</p>`; return; }
+    if (!items.length) { box.innerHTML = `<p class="empty">${Store.stale && !S.episodes.length ? "Не вдалося завантажити записи. Перевір інтернет." : S.episodes.length ? "Нічого не знайшов" : "Поки немає записів. Можна імпортувати щоденник у Налаштуваннях."}</p>`; return; }
     let cur = null, list = null;
     items.forEach((it) => {
       const d = new Date(it.at), k = d.getFullYear() + "-" + d.getMonth();
@@ -466,7 +420,6 @@
         list = document.createElement("div"); list.className = "list";
         box.append(h, list);
       }
-      if (it.ok) { list.appendChild(okRow(it.ok)); return; }
       const tmp = document.createElement("div"); renderList(tmp, [it.e]); list.appendChild(tmp.firstChild);
     });
   }
@@ -640,8 +593,9 @@
     Charts.months($("#chart-months"), months);
 
     // календар
+    // Від першого запису до сьогодні: день без запису болю = день без болю.
     const lv = new Map();
-    S.okDays.forEach((d) => lv.set(d, "ok"));
+    if (all.length) for (let d = dayKey(new Date(all[all.length - 1].started_at)), t = today(); d <= t; d = shift(d, 1)) lv.set(d, "ok");
     all.forEach((e) => {
       const k = dayKey(new Date(e.started_at)); const i = e.intensity;
       const c = i == null || i <= 3 ? "l1" : i <= 6 ? "l2" : "l3";
@@ -738,7 +692,7 @@
   $("#wipe-btn").addEventListener("click", async () => {
     const n = S.episodes.length + S.okDays.length;
     if (!n) return toast("Записів немає");
-    if (!(await ask("Видалити всі записи?", `Буде видалено ${pl(S.episodes.length, "запис", "записи", "записів")} і ${pl(S.okDays.length, "день", "дні", "днів")} без болю. Скасувати не можна. Перед цим збережи «Експорт JSON».`, "Видалити все", "Скасувати"))) return;
+    if (!(await ask("Видалити всі записи?", `Буде видалено ${pl(S.episodes.length, "запис", "записи", "записів")}${S.okDays.length ? ` і ${pl(S.okDays.length, "відмітку", "відмітки", "відміток")} «без болю»` : ""}. Скасувати не можна. Перед цим збережи «Експорт JSON».`, "Видалити все", "Скасувати"))) return;
     try { await Store.wipe(); await reload(); toast("Усі записи видалено"); } catch (e) { fail(e); }
   });
   $("#delacc-btn").addEventListener("click", async () => {
@@ -850,13 +804,8 @@
     const e = S.episodes.find((x) => dayKey(new Date(x.started_at)) === day);
     const d = new Date(day + "T12:00:00");
     if (e) return openSheet(e, { live: isLive(e) });
-    if (S.okDays.includes(day)) {
-      if (await ask("Прибрати відмітку?", `${dmy(d)} — день без болю. Прибрати цю відмітку?`, "Прибрати", "Залишити")) { await Store.unmarkOk(day).catch(fail); await reload(); }
-      return;
-    }
-    const pick = await ask(`${dmy(d)}`, "На цей день немає запису.", "Записати біль", "Відмітити без болю");
-    if (pick) { openSheet({ started_at: new Date(day + "T12:00:00").toISOString() }, { title: "Минулий епізод" }); }
-    else if ($("#ask-sheet").dataset.choice === "no") { await Store.markOk(day).catch(fail); await reload(); toast("Відмічено день без болю"); }
+    if (day > today()) return;
+    if (await ask(`${dmy(d)}`, "Цього дня голова не боліла. Записати біль?", "Записати біль", "Скасувати")) openSheet({ started_at: new Date(day + "T12:00:00").toISOString() }, { title: "Минулий епізод" });
   });
 
   /* ---------- зʼєднання ---------- */

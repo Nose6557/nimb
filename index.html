@@ -72,11 +72,7 @@
 
     <div class="card" id="quick-card">
       <button class="big-btn" id="btn-pain"><b>Болить</b><span>зараз</span></button>
-      <div class="row">
-        <button class="btn ghost" id="btn-ok">Сьогодні без болю</button>
-        <button class="btn ghost" id="btn-past">Записати минулий</button>
-      </div>
-      <button class="link center" id="btn-ok-other" type="button">Відмітити інший день без болю</button>
+      <button class="btn ghost" id="btn-past">Записати минулий</button>
     </div>
 
     <div class="card risk" id="risk-card" data-level="">
@@ -105,7 +101,6 @@
       <button class="chip on" type="button" data-f="" aria-pressed="true">Усе</button>
       <button class="chip" type="button" data-f="strong" aria-pressed="false">Сильний біль 7+</button>
       <button class="chip" type="button" data-f="meds" aria-pressed="false">З таблеткою</button>
-      <button class="chip" type="button" data-f="ok" aria-pressed="false">Без болю</button>
     </div>
     <div id="hist-list"></div>
   </div>
@@ -126,7 +121,7 @@
     <div class="card"><div class="card-head"><h3>Епізоди по місяцях</h3></div><p class="card-note">Стовпчик — епізоди. Точка — дні з таблеткою. Торкнись місяця, щоб побачити числа.</p><div class="chart" id="chart-months"></div></div>
     <div class="card"><div class="card-head"><h3>Календар</h3></div><p class="card-note">Кожна клітинка — день. Колір — сила болю. Торкнись дня, щоб відкрити його.</p>
       <div class="heat-wrap"><div class="heat-wd" aria-hidden="true"><span>Пн</span><span>Ср</span><span>Пт</span><span>Нд</span></div><div class="heat-scroll" id="heat-scroll"><div class="heat-months" id="heat-months" aria-hidden="true"></div><div class="heat" id="heat"></div></div></div>
-      <div class="legend"><span><i class="lg-none"></i>немає запису</span><span><i class="lg-ok"></i>без болю</span><span><i class="lg-l1"></i>слабкий 0–3</span><span><i class="lg-l2"></i>середній 4–6</span><span><i class="lg-l3"></i>сильний 7–10</span></div></div>
+      <div class="legend"><span><i class="lg-none"></i>до першого запису</span><span><i class="lg-ok"></i>без болю</span><span><i class="lg-l1"></i>слабкий 0–3</span><span><i class="lg-l2"></i>середній 4–6</span><span><i class="lg-l3"></i>сильний 7–10</span></div></div>
     <div class="card"><div class="card-head"><h3>Що впливає саме на тебе</h3></div><p class="card-note" id="factors-note"></p><div id="factors"></div></div>
     <div class="grid2">
       <div class="card"><h3>Коли починається</h3><div class="hbars" id="b-onset"></div></div>
@@ -199,17 +194,6 @@
 
 <!-- смужка «немає зʼєднання» -->
 <div class="netbar" id="net-bar" role="status" hidden></div>
-
-<!-- лист: день без болю -->
-<dialog class="sheet" id="ok-sheet" aria-labelledby="ok-title">
-  <div class="sheet-body">
-    <div class="grabber"></div>
-    <div class="sheet-head"><h2 id="ok-title">День без болю</h2><button class="x-btn" data-close aria-label="Закрити">✕</button></div>
-    <label class="field"><span>Дата</span><input type="date" id="ok-day"></label>
-    <p class="note error" id="ok-err" role="alert" hidden></p>
-    <button class="btn primary" id="ok-save">Відмітити</button>
-  </div>
-</dialog>
 
 <!-- лист: коли саме (таблетка, початок болю) -->
 <dialog class="sheet" id="when-sheet" aria-labelledby="when-title">
