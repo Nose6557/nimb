@@ -53,6 +53,36 @@
       box.appendChild(b);
     }
   }
+  // «Коли?» — швидкі варіанти «N хв тому» або свій час. Повертає ISO або null (закрили).
+  const AGO = [[0, "Зараз"], [15, "15 хв тому"], [30, "30 хв тому"], [60, "1 год тому"], [120, "2 год тому"], [180, "3 год тому"]];
+  function agoChips(box, min, onPick) {
+    box.innerHTML = "";
+    const now = Date.now();
+    AGO.filter(([m]) => !min || now - m * 6e4 >= min).forEach(([m, label]) => {
+      const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = label;
+      b.onclick = () => { [...box.children].forEach((c) => { c.classList.toggle("on", c === b); c.setAttribute("aria-pressed", c === b); }); onPick(new Date(now - m * 6e4).toISOString()); };
+      box.appendChild(b);
+    });
+  }
+  function pickWhen({ title, value, min, minErr }) {
+    return new Promise((res) => {
+      const d = $("#when-sheet"); let done = false;
+      const end = (v) => { if (done) return; done = true; if (d.open) d.close(); res(v); };
+      $("#when-title").textContent = title;
+      const inp = $("#when-at"); inp.value = toLocalInput(value || new Date().toISOString()); inp.max = toLocalInput(new Date().toISOString());
+      sheetErr("#when-err", "");
+      agoChips($("#when-quick"), min, end);
+      $("#when-save").onclick = () => {
+        const at = fromLocalInput(inp.value);
+        if (!at) return sheetErr("#when-err", "Вибери дату й час.");
+        if (+new Date(at) > Date.now() + 6e4) return sheetErr("#when-err", "Цей час ще не настав. Перевір дату й час.");
+        if (min && +new Date(at) < min) return sheetErr("#when-err", minErr || "Занадто давно.");
+        end(at);
+      };
+      d.addEventListener("close", () => end(null), { once: true });
+      d.showModal();
+    });
+  }
   // Назва останньої таблетки — для швидкої кнопки.
   const lastMedName = () => { for (const e of S.episodes) if (e.meds && e.meds.length) return e.meds[e.meds.length - 1].name; return "Цитрамон"; };
   function fail(e) { console.error(e); toast(e && e.message ? e.message : "Щось пішло не так"); }
@@ -188,11 +218,15 @@
   }
 
   /* ---------- головна ---------- */
-  // «Болить зараз» — лише запис, створений кнопкою «Болить» (створено ≈ тоді ж, коли почалось),
-  // без «Минуло» і не старший за 48 год. Минулий запис без кінця не стає активним.
+  // «Болить зараз» — запис без «Минуло», що почався не раніше ніж за 12 год до створення
+  // (початок можна перенести назад: «почалося 2 год тому») і не старший за 48 год.
+  // Давніший запис без кінця і імпорт не стають активними.
+  const LIVE_BACK = 12 * 3600e3;
+  const liveMin = (x) => (x.created_at ? +new Date(x.created_at) : Date.now()) - LIVE_BACK;
+  const LIVE_MIN_ERR = "Понад 12 год тому — це вже минулий епізод. Додай його через «Минулий епізод».";
   const isLive = (x) => {
     const c = x.created_at ? +new Date(x.created_at) : NaN, st = +new Date(x.started_at);
-    return !x.ended_at && Number.isFinite(c) && Math.abs(c - st) < 15 * 6e4 && Date.now() - st < 48 * 3600e3;
+    return !x.ended_at && x.source !== "import" && Number.isFinite(c) && c - st > -15 * 6e4 && c - st <= LIVE_BACK && Date.now() - st < 48 * 3600e3;
   };
   function activeEpisode() { return S.episodes.find(isLive) || null; }
   let timerId = null;
@@ -208,7 +242,7 @@
       const meds = a.meds || [];
       const lastMed = meds.length ? Math.max(...meds.map((m) => +new Date(m.at || a.started_at))) : 0;
       c.innerHTML = `
-        <div class="card-head"><span class="eyebrow">Болить зараз</span><span class="small muted">з ${hm(a.started_at)}</span></div>
+        <div class="card-head"><span class="eyebrow">Болить зараз</span><button class="link small-link" id="a-start" aria-label="Змінити час початку">з ${hm(a.started_at)} · змінити</button></div>
         <h2 class="sr-only">Болить зараз</h2>
         <p class="timer" id="t-elapsed"></p>
         <p class="small muted" id="t-meds"></p>
@@ -230,11 +264,22 @@
       }
       const med = lastMedName();
       $("#a-med").textContent = "+ " + med;
-      $("#a-med").onclick = async () => { await saveEp(a.id, { ...a, meds: [...meds, { name: med, at: new Date().toISOString() }] }); toast(`${med} записано`); };
+      $("#a-med").onclick = async () => {
+        const at = await pickWhen({ title: `Коли випив ${med}?` });
+        if (!at) return;
+        await saveEp(a.id, { ...a, meds: [...meds, { name: med, at }] }); toast(`${med} о ${hm(at)} записано`);
+      };
+      $("#a-start").onclick = async () => {
+        const at = await pickWhen({ title: "Коли почало боліти?", value: a.started_at, min: liveMin(a), minErr: LIVE_MIN_ERR });
+        if (!at) return;
+        const d = dayKey(new Date(at));
+        try { if (S.okDays.includes(d)) await Store.unmarkOk(d); } catch (e) { fail(e); }
+        await saveEp(a.id, { ...a, started_at: at, onset: Tags.onsetOf(new Date(at)) }); toast(`Почалося о ${hm(at)}`);
+      };
       $("#a-more").onclick = () => openSheet(a, { live: true });
       $("#a-end").onclick = async () => { const ended = { ...a, ended_at: new Date().toISOString() }; await saveEp(a.id, ended); openEnd(ended); };
       // Перші 10 хвилин можна прибрати випадковий запис без питань.
-      if (Date.now() - new Date(a.started_at) < 10 * 6e4) { $("#a-undo").hidden = false; $("#a-undo").onclick = () => undoPain(a.id); }
+      if (Date.now() - new Date(a.created_at || a.started_at) < 10 * 6e4) { $("#a-undo").hidden = false; $("#a-undo").onclick = () => undoPain(a.id); }
     }
     const t = today();
     const hadToday = S.episodes.some((e) => dayKey(new Date(e.started_at)) === t);
@@ -445,8 +490,10 @@
           const n = form.meds.filter((m) => m.name === k).length;
           if (n >= 2) form.meds = form.meds.filter((m) => m.name !== k);
           // Під час болю — час тапу; для минулого запису — час початку.
+          // Під час болю — час тапу; для минулого запису — час початку. Час потім можна змінити нижче.
           else form.meds.push({ name: k, at: sheetLive ? new Date().toISOString() : fromLocalInput($("#ep-start").value) || new Date().toISOString() });
           $("#ep-relief-f").hidden = !form.meds.length;
+          renderMedTimes();
         } else if (opts.single) form[name] = form[name] === k ? null : k;
         else form[name] = form[name].includes(k) ? form[name].filter((x) => x !== k) : [...form[name], k];
         $$(".chip", box).forEach((c) => c._paint());
@@ -454,6 +501,27 @@
       b._paint = paint; paint(); box.appendChild(b);
     });
   }
+  // Час кожної таблетки — окреме поле, щоб записати «випив 2 години тому».
+  function renderMedTimes() {
+    const box = $("#ep-med-times"); box.innerHTML = "";
+    const count = {};
+    form.meds.forEach((m) => {
+      count[m.name] = (count[m.name] || 0) + 1;
+      const l = document.createElement("label"); l.className = "med-time";
+      const s = document.createElement("span"); s.textContent = `${T.meds[m.name] || m.name}${count[m.name] > 1 ? ` · ${count[m.name]}-га` : ""} — коли випив`;
+      const inp = document.createElement("input"); inp.type = "datetime-local";
+      inp.value = toLocalInput(m.at || form.started_at); inp.max = toLocalInput(new Date().toISOString());
+      inp.onchange = () => { const v = fromLocalInput(inp.value); if (v) m.at = v; };
+      l.append(s, inp); box.appendChild(l);
+    });
+  }
+  // Для минулого запису таблетки «в момент початку» їдуть разом із початком.
+  $("#ep-start").addEventListener("change", () => {
+    const v = fromLocalInput($("#ep-start").value);
+    if (!form || !v) return;
+    form.meds.forEach((m) => { if (!m.at || m.at === form._start) m.at = v; });
+    form._start = v; renderMedTimes();
+  });
   function openSheet(e, opt = {}) {
     editing = e && e.id ? e : null;
     const now = new Date();
@@ -474,6 +542,10 @@
     $("#ep-note").value = form.note;
     chipGroup("sides", T.sides); chipGroup("meds", T.meds); chipGroup("relief", T.relief, { single: true }); chipGroup("triggers", T.triggers);
     $("#ep-relief-f").hidden = !form.meds.length;
+    form._start = form.started_at; renderMedTimes();
+    // Під час болю — швидкі «почалося N хв тому».
+    const q = $("#ep-start-quick"); q.hidden = !sheetLive;
+    if (sheetLive) agoChips(q, editing ? liveMin(editing) : 0, (at) => { $("#ep-start").value = toLocalInput(at); $("#ep-start").dispatchEvent(new Event("change")); });
     $("#ep-del").hidden = !editing;
     sheetErr("#ep-err", "");
     sheet.showModal();
@@ -490,8 +562,11 @@
     sheetErr("#ep-err", "");
     if (end && end < start) return sheetErr("#ep-err", "«Минуло» раніше, ніж «Почалося». Перевір час.");
     if (start > new Date(Date.now() + 5 * 6e4).toISOString()) return sheetErr("#ep-err", "Початок у майбутньому. Перевір дату й час.");
+    if (sheetLive && editing && !end && +new Date(start) < liveMin(editing)) return sheetErr("#ep-err", LIVE_MIN_ERR);
+    if (form.meds.some((m) => m.at && +new Date(m.at) > Date.now() + 5 * 6e4)) return sheetErr("#ep-err", "Час таблетки в майбутньому. Перевір дату й час.");
+    const { _start, ...rest } = form;
     const data = {
-      ...form, started_at: start, ended_at: end,
+      ...rest, started_at: start, ended_at: end,
       onset: editing && editing.started_at === start && form.onset ? form.onset : Tags.onsetOf(new Date(start)),
       intensity: form.intensity,
       nausea: $("#ep-nausea").checked, note: $("#ep-note").value.trim(),

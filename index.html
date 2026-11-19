@@ -211,6 +211,18 @@
   </div>
 </dialog>
 
+<!-- лист: коли саме (таблетка, початок болю) -->
+<dialog class="sheet" id="when-sheet" aria-labelledby="when-title">
+  <div class="sheet-body">
+    <div class="grabber"></div>
+    <div class="sheet-head"><h2 id="when-title">Коли?</h2><button class="x-btn" data-close aria-label="Закрити">✕</button></div>
+    <div class="chips" id="when-quick" role="group" aria-labelledby="when-title"></div>
+    <label class="field"><span>Інший час</span><input type="datetime-local" id="when-at"></label>
+    <p class="note error" id="when-err" role="alert" hidden></p>
+    <button class="btn primary" id="when-save">Зберегти</button>
+  </div>
+</dialog>
+
 <!-- лист: підтвердження -->
 <dialog class="sheet" id="ask-sheet" aria-labelledby="ask-title">
   <div class="sheet-body">
@@ -229,7 +241,10 @@
     <div class="sheet-head"><h2 id="ep-title">Запис</h2><button class="x-btn" data-close aria-label="Закрити">✕</button></div>
     <button class="link center" id="ep-undo" type="button" hidden>Натиснув випадково — прибрати запис</button>
     <div class="grid2 gap12">
-      <label class="field"><span>Почалося</span><input type="datetime-local" id="ep-start"></label>
+      <div class="field">
+        <label class="field"><span>Почалося</span><input type="datetime-local" id="ep-start"></label>
+        <div class="chips" id="ep-start-quick" hidden></div>
+      </div>
       <label class="field"><span>Минуло</span><input type="datetime-local" id="ep-end"></label>
     </div>
     <div class="field">
@@ -238,7 +253,7 @@
       <div class="scale"><span>0 · ледь</span><span>5 · заважає</span><span>10 · нестерпно</span></div>
     </div>
     <div class="field"><span id="g-sides">Де болить</span><div class="chips" data-group="sides" role="group" aria-labelledby="g-sides"></div></div>
-    <div class="field"><span id="g-meds">Таблетка</span><div class="chips" data-group="meds" role="group" aria-labelledby="g-meds"></div><p class="hint">Ще один тап — друга таблетка, третій — прибрати.</p></div>
+    <div class="field"><span id="g-meds">Таблетка</span><div class="chips" data-group="meds" role="group" aria-labelledby="g-meds"></div><p class="hint">Ще один тап — друга таблетка, третій — прибрати.</p><div class="med-times" id="ep-med-times"></div></div>
     <div class="field" id="ep-relief-f"><span id="g-relief">Таблетка допомогла?</span><div class="chips" data-group="relief" data-single role="group" aria-labelledby="g-relief"></div></div>
     <div class="field"><span id="g-trig">Що могло спричинити</span><div class="chips" data-group="triggers" role="group" aria-labelledby="g-trig"></div></div>
     <label class="switch"><span>Нудота</span><input type="checkbox" id="ep-nausea"></label>

@@ -160,6 +160,11 @@ button:focus-visible,a:focus-visible,.btn:focus-visible,[tabindex]:focus-visible
 /* ——— поля ——— */
 .field{display:flex; flex-direction:column; gap:6px}
 .field > span{font-size:var(--fs-s); color:var(--text-muted); margin-left:4px}
+.med-times{display:flex; flex-direction:column; gap:12px; margin-top:6px}
+.med-times:empty{display:none}
+.med-time{display:flex; flex-direction:column; gap:6px}
+.med-time > span{font-size:var(--fs-s); color:var(--text-muted); margin-left:4px}
+#ep-start-quick .chip,#when-quick .chip{font-size:var(--fs-s); padding:6px 12px}
 .field input,.field textarea,.field select{
   width:100%; background:var(--fill); border:1px solid var(--border-strong); border-radius:12px;
   padding:12px 14px; min-height:48px; font-size:var(--fs-b); caret-color:var(--accent); appearance:none;
