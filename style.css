@@ -164,7 +164,7 @@ button:focus-visible,a:focus-visible,.btn:focus-visible,[tabindex]:focus-visible
 .med-times:empty{display:none}
 .med-time{display:flex; flex-direction:column; gap:6px}
 .med-time > span{font-size:var(--fs-s); color:var(--text-muted); margin-left:4px}
-#ep-start-quick .chip,#when-quick .chip{font-size:var(--fs-s); padding:6px 12px}
+#ep-start-quick .chip{font-size:var(--fs-s); padding:6px 12px}
 .field input,.field textarea,.field select{
   width:100%; background:var(--fill); border:1px solid var(--border-strong); border-radius:12px;
   padding:12px 14px; min-height:48px; font-size:var(--fs-b); caret-color:var(--accent); appearance:none;
@@ -208,8 +208,6 @@ button:focus-visible,a:focus-visible,.btn:focus-visible,[tabindex]:focus-visible
 .env-line b{color:var(--text); font-weight:500}
 
 /* ——— активний епізод ——— */
-.active-ep{border-color:var(--accent); background:linear-gradient(var(--accent-soft),var(--accent-soft)),var(--surface)}
-.timer{font-family:'Unbounded',sans-serif; font-size:var(--fs-xxl); font-weight:700; font-variant-numeric:tabular-nums}
 
 /* ——— статистика ——— */
 .stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr)); gap:1px; background:var(--border); border:1px solid var(--border); border-radius:var(--r); overflow:hidden}
@@ -336,8 +334,7 @@ dialog.sheet[open]{animation:up .25s cubic-bezier(.2,.8,.2,1)}
   .tab{padding:10px 0}
   .shell{max-width:1080px}
   #screen-home .shell{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-items:start}
-  #screen-home .top,#screen-home #active-slot:not(:empty),#screen-home .shell > .card:last-child{grid-column:1/-1}
-  #screen-home #active-slot:empty{display:none}
+  #screen-home .top,#screen-home .shell > .card:last-child{grid-column:1/-1}
   .toast{bottom:32px}
 }
 .sheet-body:has(> .sheet-foot){padding-bottom:0}

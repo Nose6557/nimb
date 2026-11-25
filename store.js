@@ -3,7 +3,7 @@
    Решта коду знає лише про цей інтерфейс.
 
    Епізод:
-   { id, started_at, ended_at, onset, intensity, sides[], meds[{name, at}], relief,
+   { id, started_at, ended_at, duration, onset, intensity, sides[], meds[{name, at}], relief,
      triggers[], nausea, note, source, created_at }
 
    Офлайн (режим Supabase): останній список записів лежить у браузері (кеш).
@@ -43,10 +43,10 @@
   const isNet = (e) => !navigator.onLine || e instanceof TypeError || /fetch|network|load failed|timeout/i.test(String(e && e.message));
   const must = ({ data, error }) => { if (error) throw error; return data; };
 
-  const COLS = "id,started_at,ended_at,onset,intensity,sides,meds,relief,triggers,nausea,note,source,created_at";
+  const COLS = "id,started_at,ended_at,duration,onset,intensity,sides,meds,relief,triggers,nausea,note,source,created_at";
   function clean(e) {
     return {
-      started_at: e.started_at, ended_at: e.ended_at || null, onset: e.onset || null,
+      started_at: e.started_at, ended_at: e.ended_at || null, duration: e.duration || null, onset: e.onset || null,
       intensity: e.intensity == null || e.intensity === "" ? null : Number(e.intensity),
       sides: e.sides || [], meds: e.meds || [], relief: e.relief || null,
       triggers: e.triggers || [], nausea: !!e.nausea, note: e.note || null, source: e.source || "app",

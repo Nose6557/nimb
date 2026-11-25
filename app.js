@@ -16,6 +16,10 @@
   const MON_SHORT = ["січ", "лют", "бер", "кві", "тра", "чер", "лип", "сер", "вер", "жов", "лис", "гру"];
   const WD = ["Понеділок", "Вівторок", "Середа", "Четвер", "П’ятниця", "Субота", "Неділя"];
   const WD_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"];
+  // Тривалість: точна (старі записи з «Минуло») або приблизна (чипи, версія 7).
+  const durKeyMs = (ms) => (ms < 3600e3 ? "lt1" : ms < 4 * 3600e3 ? "h1_4" : ms < 24 * 3600e3 ? "h4_24" : "day");
+  const durKey = (e) => e.duration || (e.ended_at ? durKeyMs(new Date(e.ended_at) - new Date(e.started_at)) : null);
+  const durLabel = (e) => (e.ended_at ? durText(new Date(e.ended_at) - new Date(e.started_at)) : e.duration ? T.duration[e.duration] : "");
   const durText = (ms) => { const m = Math.max(0, Math.round(ms / 6e4)); const h = Math.floor(m / 60); return h ? `${h} год ${m % 60} хв` : `${m} хв`; };
   const dmy = (d) => `${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
   // Тост кладемо у відкритий лист, інакше лист (верхній шар) його перекриває.
@@ -64,27 +68,6 @@
       box.appendChild(b);
     });
   }
-  function pickWhen({ title, value, min, minErr }) {
-    return new Promise((res) => {
-      const d = $("#when-sheet"); let done = false;
-      const end = (v) => { if (done) return; done = true; if (d.open) d.close(); res(v); };
-      $("#when-title").textContent = title;
-      const inp = $("#when-at"); inp.value = toLocalInput(value || new Date().toISOString()); inp.max = toLocalInput(new Date().toISOString());
-      sheetErr("#when-err", "");
-      agoChips($("#when-quick"), min, end);
-      $("#when-save").onclick = () => {
-        const at = fromLocalInput(inp.value);
-        if (!at) return sheetErr("#when-err", "Вибери дату й час.");
-        if (+new Date(at) > Date.now() + 6e4) return sheetErr("#when-err", "Цей час ще не настав. Перевір дату й час.");
-        if (min && +new Date(at) < min) return sheetErr("#when-err", minErr || "Занадто давно.");
-        end(at);
-      };
-      d.addEventListener("close", () => end(null), { once: true });
-      d.showModal();
-    });
-  }
-  // Назва останньої таблетки — для швидкої кнопки.
-  const lastMedName = () => { for (const e of S.episodes) if (e.meds && e.meds.length) return e.meds[e.meds.length - 1].name; return "Цитрамон"; };
   function fail(e) { console.error(e); toast(e && e.message ? e.message : "Щось пішло не так"); }
   const today = () => dayKey(new Date());
 
@@ -218,69 +201,10 @@
   }
 
   /* ---------- головна ---------- */
-  // «Болить зараз» — запис без «Минуло», що почався не раніше ніж за 12 год до створення
-  // (початок можна перенести назад: «почалося 2 год тому») і не старший за 48 год.
-  // Давніший запис без кінця і імпорт не стають активними.
-  const LIVE_BACK = 12 * 3600e3;
-  const liveMin = (x) => (x.created_at ? +new Date(x.created_at) : Date.now()) - LIVE_BACK;
-  const LIVE_MIN_ERR = "Понад 12 год тому — це вже минулий епізод. Додай його через «Минулий епізод».";
-  const isLive = (x) => {
-    const c = x.created_at ? +new Date(x.created_at) : NaN, st = +new Date(x.started_at);
-    return !x.ended_at && x.source !== "import" && Number.isFinite(c) && c - st > -15 * 6e4 && c - st <= LIVE_BACK && Date.now() - st < 48 * 3600e3;
-  };
-  function activeEpisode() { return S.episodes.find(isLive) || null; }
-  let timerId = null;
+  // З версії 7 біль — це факт: «Болить» одразу створює запис. Кнопки «Минуло» і стану «Болить зараз» немає.
   function renderHome() {
     const d = new Date();
     $("#home-date").textContent = `${WD[(d.getDay() + 6) % 7]}, ${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
-    const a = activeEpisode();
-    const slot = $("#active-slot"); slot.innerHTML = "";
-    clearInterval(timerId);
-    $("#btn-pain").hidden = !!a;
-    if (a) {
-      const c = document.createElement("div"); c.className = "card active-ep";
-      const meds = a.meds || [];
-      const lastMed = meds.length ? Math.max(...meds.map((m) => +new Date(m.at || a.started_at))) : 0;
-      c.innerHTML = `
-        <div class="card-head"><span class="eyebrow">Болить зараз</span><button class="link small-link" id="a-start" aria-label="Змінити час початку">з ${hm(a.started_at)} · змінити</button></div>
-        <h2 class="sr-only">Болить зараз</h2>
-        <p class="timer" id="t-elapsed"></p>
-        <p class="small muted" id="t-meds"></p>
-        <div class="row"><button class="btn ghost small" id="a-med"></button><button class="btn ghost small" id="a-more">Деталі</button></div>
-        <div class="field" id="a-relief" hidden><span>Таблетка допомогла?</span><div class="chips"></div></div>
-        <button class="btn primary" id="a-end">Минуло</button>
-        <button class="link center" id="a-undo" hidden>Натиснув випадково — прибрати запис</button>`;
-      slot.appendChild(c);
-      const tick = () => { const el = $("#t-elapsed"); if (el) el.textContent = durText(Date.now() - new Date(a.started_at)); };
-      tick(); timerId = setInterval(tick, 10000);
-      $("#t-meds").textContent = meds.length ? "Таблетки: " + meds.map((m) => `${m.name} о ${hm(m.at || a.started_at)}`).join(", ") : "Таблетку не пив";
-      if (meds.length && !a.relief && Date.now() - lastMed > 40 * 6e4) {
-        const box = $("#a-relief"); box.hidden = false;
-        Object.entries(T.relief).forEach(([k, v]) => {
-          const b = document.createElement("button"); b.className = "chip"; b.textContent = v;
-          b.onclick = async () => { await saveEp(a.id, { ...a, relief: k }); toast("Записав"); };
-          box.querySelector(".chips").appendChild(b);
-        });
-      }
-      const med = lastMedName();
-      $("#a-med").textContent = "+ " + med;
-      $("#a-med").onclick = async () => {
-        const at = await pickWhen({ title: `Коли випив ${med}?` });
-        if (!at) return;
-        await saveEp(a.id, { ...a, meds: [...meds, { name: med, at }] }); toast(`${med} о ${hm(at)} записано`);
-      };
-      $("#a-start").onclick = async () => {
-        const at = await pickWhen({ title: "Коли почало боліти?", value: a.started_at, min: liveMin(a), minErr: LIVE_MIN_ERR });
-        if (!at) return;
-        const d = dayKey(new Date(at));
-        try { if (S.okDays.includes(d)) await Store.unmarkOk(d); } catch (e) { fail(e); }
-        await saveEp(a.id, { ...a, started_at: at, onset: Tags.onsetOf(new Date(at)) }); toast(`Почалося о ${hm(at)}`);
-      };
-      $("#a-more").onclick = () => openSheet(a, { live: true });
-      $("#a-end").onclick = async () => { const ended = { ...a, ended_at: new Date().toISOString() }; await saveEp(a.id, ended); openEnd(ended); };
-      // Перші 10 хвилин можна прибрати випадковий запис без питань.
-      if (Date.now() - new Date(a.created_at || a.started_at) < 10 * 6e4) { $("#a-undo").hidden = false; $("#a-undo").onclick = () => undoPain(a.id); }
-    }
     renderList($("#recent-list"), S.episodes.slice(0, 3), true);
   }
   $("#btn-pain").addEventListener("click", async () => {
@@ -289,34 +213,12 @@
       const e = await Store.add({ started_at: now.toISOString(), onset: Tags.onsetOf(now) });
       if (S.okDays.includes(today())) await Store.unmarkOk(today());
       await reload();
-      openSheet(e, { title: "Болить зараз", live: true, undo: true });
+      openSheet(e, { title: "Болить", live: true, undo: true });
     } catch (err) { fail(err); }
   });
   async function undoPain(id) {
     try { await Store.remove(id); if (sheet.open) sheet.close(); await reload(); toast("Запис прибрано"); } catch (e) { fail(e); }
   }
-  /* ---------- після «Минуло»: сила і чи допомогла таблетка ---------- */
-  let endEp = null, endInt = null, endRel = null;
-  function openEnd(e) {
-    endEp = e; endInt = e.intensity ?? null; endRel = e.relief || null;
-    $("#end-sub").textContent = `Тривало ${durText(new Date(e.ended_at) - new Date(e.started_at))}. Добре, що минуло.`;
-    intChips($("#end-int"), endInt, (v) => { endInt = v; });
-    const hasMeds = !!(e.meds && e.meds.length);
-    $("#end-relief-f").hidden = !hasMeds;
-    const box = $("#end-relief"); box.innerHTML = "";
-    Object.entries(T.relief).forEach(([k, v]) => {
-      const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = v;
-      b.setAttribute("aria-pressed", endRel === k); b.classList.toggle("on", endRel === k);
-      b.onclick = () => { endRel = endRel === k ? null : k; [...box.children].forEach((c, i) => { const on = Object.keys(T.relief)[i] === endRel; c.classList.toggle("on", on); c.setAttribute("aria-pressed", on); }); };
-      box.appendChild(b);
-    });
-    $("#end-sheet").showModal();
-  }
-  $("#end-save").addEventListener("click", async () => {
-    $("#end-sheet").close();
-    if (endEp) { await saveEp(endEp.id, { ...endEp, intensity: endInt, relief: endEp.meds && endEp.meds.length ? endRel : null }); toast("Збережено"); }
-  });
-  $("#end-skip").addEventListener("click", () => $("#end-sheet").close());
   $("#btn-past").addEventListener("click", () => openSheet(null, { title: "Минулий епізод" }));
 
   // Який день показує прогноз: 0 — сьогодні, 1 — завтра, 2 — післязавтра. Увечері за замовчуванням — завтра.
@@ -374,7 +276,7 @@
   function epSub(e) {
     if (e.note) return e.note.split("\n")[0];
     const t = (e.triggers || []).map((x) => T.triggers[x] || x).join(", ");
-    return t || (e.ended_at ? durText(new Date(e.ended_at) - new Date(e.started_at)) : "");
+    return t || durLabel(e);
   }
   function renderList(box, items, compact) {
     box.innerHTML = ""; box.classList.toggle("is-empty", !items.length);
@@ -390,7 +292,7 @@
       const i = b.querySelector(".int");
       if (e.intensity != null) { i.textContent = e.intensity; i.dataset.i = ""; i.style.setProperty("--i", e.intensity); i.classList.toggle("hi", e.intensity >= 7); i.setAttribute("aria-label", "Сила " + e.intensity); }
       else { i.textContent = "–"; i.setAttribute("aria-label", "Сила не вказана"); }
-      b.onclick = () => openSheet(e, { live: isLive(e) });
+      b.onclick = () => openSheet(e);
       box.appendChild(b);
     });
   }
@@ -479,7 +381,7 @@
     editing = e && e.id ? e : null;
     const now = new Date();
     form = {
-      started_at: e ? e.started_at : now.toISOString(), ended_at: e ? e.ended_at : null,
+      started_at: e ? e.started_at : now.toISOString(), ended_at: e ? e.ended_at : null, duration: e ? durKey(e) : null,
       intensity: e ? e.intensity : null, sides: [...((e && e.sides) || [])], meds: ((e && e.meds) || []).map((m) => ({ ...m })),
       relief: e ? e.relief : null, triggers: [...((e && e.triggers) || [])], nausea: !!(e && e.nausea), note: (e && e.note) || "",
       onset: e ? e.onset : null, source: e ? e.source : "app",
@@ -488,17 +390,16 @@
     const st = new Date(form.started_at);
     $("#ep-title").textContent = opt.title || (editing ? `Запис · ${dmy(st)}, ${hm(form.started_at)}` : "Запис");
     $("#ep-start").value = toLocalInput(form.started_at);
-    $("#ep-end").value = toLocalInput(form.ended_at);
     intChips($("#ep-int"), form.intensity, (v) => { form.intensity = v; });
     $("#ep-undo").hidden = !opt.undo;
     $("#ep-nausea").checked = form.nausea;
     $("#ep-note").value = form.note;
-    chipGroup("sides", T.sides); chipGroup("meds", T.meds); chipGroup("relief", T.relief, { single: true }); chipGroup("triggers", T.triggers);
+    chipGroup("sides", T.sides); chipGroup("meds", T.meds); chipGroup("relief", T.relief, { single: true }); chipGroup("duration", T.duration, { single: true }); chipGroup("triggers", T.triggers);
     $("#ep-relief-f").hidden = !form.meds.length;
     form._start = form.started_at; renderMedTimes();
     // Під час болю — швидкі «почалося N хв тому».
     const q = $("#ep-start-quick"); q.hidden = !sheetLive;
-    if (sheetLive) agoChips(q, editing ? liveMin(editing) : 0, (at) => { $("#ep-start").value = toLocalInput(at); $("#ep-start").dispatchEvent(new Event("change")); });
+    if (sheetLive) agoChips(q, 0, (at) => { $("#ep-start").value = toLocalInput(at); $("#ep-start").dispatchEvent(new Event("change")); });
     $("#ep-del").hidden = !editing;
     sheetErr("#ep-err", "");
     sheet.showModal();
@@ -511,15 +412,14 @@
   }
   $("#ep-save").addEventListener("click", async () => {
     const start = fromLocalInput($("#ep-start").value) || new Date().toISOString();
-    let end = fromLocalInput($("#ep-end").value);
     sheetErr("#ep-err", "");
-    if (end && end < start) return sheetErr("#ep-err", "«Минуло» раніше, ніж «Почалося». Перевір час.");
     if (start > new Date(Date.now() + 5 * 6e4).toISOString()) return sheetErr("#ep-err", "Початок у майбутньому. Перевір дату й час.");
-    if (sheetLive && editing && !end && +new Date(start) < liveMin(editing)) return sheetErr("#ep-err", LIVE_MIN_ERR);
     if (form.meds.some((m) => m.at && +new Date(m.at) > Date.now() + 5 * 6e4)) return sheetErr("#ep-err", "Час таблетки в майбутньому. Перевір дату й час.");
     const { _start, ...rest } = form;
     const data = {
-      ...rest, started_at: start, ended_at: end,
+      ...rest, started_at: start,
+      // Точний кінець (старі записи) лишаємо, поки тривалість та сама і початок не змінився.
+      ended_at: form.ended_at && editing && editing.started_at === start && form.duration === durKey(editing) ? form.ended_at : null,
       onset: editing && editing.started_at === start && form.onset ? form.onset : Tags.onsetOf(new Date(start)),
       intensity: form.intensity,
       nausea: $("#ep-nausea").checked, note: $("#ep-note").value.trim(),
@@ -781,12 +681,12 @@
   const stamp = () => today();
   $("#exp-csv").addEventListener("click", () => {
     if (!S.episodes.length && !S.okDays.length) return toast("Ще немає записів");
-    const rows = [["type", "date", "start", "end", "duration_min", "onset", "intensity", "sides", "meds", "relief", "triggers", "nausea", "note", "source"]];
+    const rows = [["type", "date", "start", "end", "duration_min", "duration", "onset", "intensity", "sides", "meds", "relief", "triggers", "nausea", "note", "source"]];
     const all = [...S.episodes.map((e) => ({ at: e.started_at, e })), ...S.okDays.map((d) => ({ at: d + "T12:00:00", ok: d }))].sort((a, b) => (a.at < b.at ? -1 : 1));
     all.forEach(({ e, ok }) => {
-      if (ok) { rows.push(["без болю", ok, "", "", "", "", "", "", "", "", "", "", "", ""]); return; }
+      if (ok) { rows.push(["без болю", ok, "", "", "", "", "", "", "", "", "", "", "", "", ""]); return; }
       const s = new Date(e.started_at);
-      rows.push(["біль", dayKey(s), hm(e.started_at), e.ended_at ? `${dayKey(new Date(e.ended_at))} ${hm(e.ended_at)}` : "", e.ended_at ? Math.round((new Date(e.ended_at) - s) / 6e4) : "",
+      rows.push(["біль", dayKey(s), hm(e.started_at), e.ended_at ? `${dayKey(new Date(e.ended_at))} ${hm(e.ended_at)}` : "", e.ended_at ? Math.round((new Date(e.ended_at) - s) / 6e4) : "", T.duration[durKey(e)] || "",
         T.onset[e.onset] || "", e.intensity ?? "", (e.sides || []).map((x) => T.sides[x] || x).join("; "),
         (e.meds || []).map((m) => `${m.name}${m.at ? " " + hm(m.at) : ""}`).join("; "), T.relief[e.relief] || "",
         (e.triggers || []).map((x) => T.triggers[x] || x).join("; "), e.nausea ? "так" : "", e.note || "", e.source || ""]);
@@ -803,7 +703,7 @@
     const day = ev.target.dataset && ev.target.dataset.day; if (!day) return;
     const e = S.episodes.find((x) => dayKey(new Date(x.started_at)) === day);
     const d = new Date(day + "T12:00:00");
-    if (e) return openSheet(e, { live: isLive(e) });
+    if (e) return openSheet(e);
     if (day > today()) return;
     if (await ask(`${dmy(d)}`, "Цього дня голова не боліла. Записати біль?", "Записати біль", "Скасувати")) openSheet({ started_at: new Date(day + "T12:00:00").toISOString() }, { title: "Минулий епізод" });
   });
